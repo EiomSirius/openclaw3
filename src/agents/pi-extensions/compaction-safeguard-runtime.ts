@@ -1,6 +1,14 @@
+import type { Model } from "@mariozechner/pi-ai";
+
 export type CompactionSafeguardRuntimeValue = {
   maxHistoryShare?: number;
   contextWindowTokens?: number;
+  /**
+   * Fallback model for compaction summarization.
+   * Used when ctx.model is undefined (ExtensionRunner not initialized).
+   */
+  // biome-ignore lint/suspicious/noExplicitAny: Model API type varies by provider
+  model?: Model<any>;
 };
 
 // Session-scoped runtime registry keyed by object identity.
