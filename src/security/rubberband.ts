@@ -43,7 +43,7 @@ const DEFAULT_CONFIG: RubberBandConfig = {
   mode: "block",
   thresholds: {
     alert: 40,
-    block: 80,
+    block: 60,
   },
   allowedDestinations: [
     "localhost",
@@ -722,11 +722,21 @@ export function analyzeCommand(
   // Calculate risk
   const risk = calculateRisk(normalizedCommand, config, contentWasStripped);
 
-  // Determine disposition
+  // Determine disposition based on mode and score
+  // Note: mode "off" returns early above, so only block/alert/log/shadow reach here
   let disposition: RubberBandDisposition;
-  if (risk.score >= config.thresholds.block) {
-    // Shadow mode: log as if blocking but allow execution
-    disposition = config.mode === "block" ? "BLOCK" : config.mode === "shadow" ? "ALERT" : "ALERT";
+
+  // "log" mode: always LOG (silent, no user notifications)
+  if (config.mode === "log") {
+    disposition = risk.score > 0 ? "LOG" : "ALLOW";
+  }
+  // "shadow" mode: LOG internally (no block, no user alerts)
+  else if (config.mode === "shadow") {
+    disposition = risk.score > 0 ? "LOG" : "ALLOW";
+  }
+  // "alert" and "block" modes: normal threshold-based disposition
+  else if (risk.score >= config.thresholds.block) {
+    disposition = config.mode === "block" ? "BLOCK" : "ALERT";
   } else if (risk.score >= config.thresholds.alert) {
     disposition = "ALERT";
   } else if (risk.score > 0) {

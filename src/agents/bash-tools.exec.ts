@@ -1094,6 +1094,8 @@ export function createExecTool(
           if (rbConfig.notifyChannel && rbNotifyCfg) {
             await notifyUserChannel(alertMsg, { sessionKey: notifySessionKey, cfg: rbNotifyCfg });
           }
+          // ALERT disposition requires approval
+          rbRequiresApproval = true;
         }
         // === END RUBBERBAND ===
         const boundNode = defaults?.node?.trim();
@@ -1403,6 +1405,8 @@ export function createExecTool(
           if (rbConfig.notifyChannel && rbNotifyCfg) {
             await notifyUserChannel(alertMsg, { sessionKey: notifySessionKey, cfg: rbNotifyCfg });
           }
+          // ALERT disposition requires approval
+          rbRequiresApproval = true;
         }
         // === END RUBBERBAND ===
 
