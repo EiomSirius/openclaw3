@@ -14,6 +14,7 @@ import { danger, info } from "../globals.js";
 import { defaultRuntime } from "../runtime.js";
 import { shortenHomePath } from "../utils.js";
 import { installChromeExtension } from "./browser-cli-extension.js";
+import { callBrowserRequest, type BrowserParentOpts } from "./browser-cli-shared.js";
 import { formatCliCommand } from "./command-format.js";
 
 const RELAY_LAUNCH_PATH = "/extension/launch";
@@ -46,7 +47,7 @@ function resolveRelayUserDataDir(profileName: string) {
 
 export function registerBrowserRelayCommands(
   browser: Command,
-  parentOpts: (cmd: Command) => { json?: boolean; browserProfile?: string },
+  parentOpts: (cmd: Command) => BrowserParentOpts,
 ) {
   const relay = browser.command("relay").description("Chrome extension relay helpers");
 
@@ -86,6 +87,28 @@ export function registerBrowserRelayCommands(
           ),
         );
         defaultRuntime.exit(1);
+      }
+
+      let relayServerStarted = false;
+      let relayServerError: string | null = null;
+      try {
+        await callBrowserRequest(
+          parent,
+          {
+            method: "POST",
+            path: "/start",
+            query: { profile: profile.name },
+          },
+          { timeoutMs: 15000 },
+        );
+        relayServerStarted = true;
+      } catch (err) {
+        relayServerError = err instanceof Error ? err.message : String(err);
+        defaultRuntime.log(
+          danger(
+            `Could not start the relay server via Gateway (${relayServerError}). Launching Chrome anyway; auto-attach may fail if the relay isn't running.`,
+          ),
+        );
       }
 
       const launchUrl = buildRelayLaunchUrl(profile.cdpPort, typeof url === "string" ? url : "");
@@ -155,6 +178,8 @@ export function registerBrowserRelayCommands(
               userDataDir,
               extensionPath: installed.path,
               launchUrl,
+              relayServerStarted,
+              relayServerError,
             },
             null,
             2,
@@ -168,6 +193,7 @@ export function registerBrowserRelayCommands(
           [
             `Launching ${exe.kind} with OpenClaw Browser Relay...`,
             `Profile: ${profile.name}`,
+            `Relay server: ${relayServerStarted ? "started" : "not started"}`,
             `User data dir: ${shortenHomePath(userDataDir)}`,
             `Extension path: ${shortenHomePath(installed.path)}`,
           ].join("\n"),

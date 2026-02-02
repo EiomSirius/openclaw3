@@ -75,7 +75,7 @@ openclaw browser create-profile \
 
 ## Launch and auto-attach (CLI)
 
-Launch Chrome with the extension loaded and auto-attach the relay tab:
+Launch Chrome with the extension loaded and auto-attach the relay tab (the CLI will attempt to start the relay server via the Gateway):
 
 ```bash
 openclaw browser relay launch

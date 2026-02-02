@@ -87,7 +87,7 @@ openclaw browser type <ref> "hello"
 
 This mode lets the agent control an existing Chrome tab that you attach manually or via the CLI launcher.
 
-Auto-attach via CLI (launches Chrome with the extension loaded):
+Auto-attach via CLI (launches Chrome with the extension loaded and attempts to start the relay server via the Gateway):
 
 ```bash
 openclaw browser relay launch
