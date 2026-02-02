@@ -34,11 +34,23 @@ export function buildGroupDisplayName(params: {
   id?: string;
   key: string;
 }) {
-  const providerKey = (params.provider?.trim().toLowerCase() || "group").trim();
+  const providerRaw = params.provider?.trim() || "group";
+  const isTelegram = providerRaw.toLowerCase() === "telegram";
+  const providerKey = providerRaw.toLowerCase();
   const groupChannel = params.groupChannel?.trim();
   const space = params.space?.trim();
   const subject = params.subject?.trim();
   const topicName = params.topicName?.trim();
+
+  // Telegram: preserve casing, use subject : topic format
+  if (isTelegram && subject) {
+    const base = subject;
+    if (topicName) {
+      return `${providerKey} : ${base} : ${topicName}`;
+    }
+    return `${providerKey} : ${base}`;
+  }
+
   const detail =
     (groupChannel && space
       ? `${space}${groupChannel.startsWith("#") ? "" : "#"}${groupChannel}`
