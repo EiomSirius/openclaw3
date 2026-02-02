@@ -337,7 +337,9 @@ export async function prepareSlackMessage(params: {
   });
   const mediaPlaceholder = allMedia.length > 0 ? allMedia.map((m) => m.placeholder).join(" ") : "";
   const rawBody = (message.text ?? "").trim() || mediaPlaceholder || "";
-  if (!rawBody) return null;
+  if (!rawBody) {
+    return null;
+  }
 
   const ackReaction = resolveAckReaction(cfg, route.agentId);
   const ackReactionValue = ackReaction ?? "";
