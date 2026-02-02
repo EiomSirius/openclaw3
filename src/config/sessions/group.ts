@@ -28,6 +28,7 @@ function shortenGroupId(value?: string) {
 export function buildGroupDisplayName(params: {
   provider?: string;
   subject?: string;
+  topicName?: string;
   groupChannel?: string;
   space?: string;
   id?: string;
@@ -37,6 +38,7 @@ export function buildGroupDisplayName(params: {
   const groupChannel = params.groupChannel?.trim();
   const space = params.space?.trim();
   const subject = params.subject?.trim();
+  const topicName = params.topicName?.trim();
   const detail =
     (groupChannel && space
       ? `${space}${groupChannel.startsWith("#") ? "" : "#"}${groupChannel}`
@@ -52,6 +54,13 @@ export function buildGroupDisplayName(params: {
   }
   if (token && !/^[@#]/.test(token) && !token.startsWith("g-") && !token.includes("#")) {
     token = `g-${token}`;
+  }
+  // Append topic name if present
+  if (topicName) {
+    const normalizedTopic = normalizeGroupLabel(topicName);
+    if (normalizedTopic) {
+      token = token ? `${token}/${normalizedTopic}` : normalizedTopic;
+    }
   }
   return token ? `${providerKey}:${token}` : providerKey;
 }
