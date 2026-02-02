@@ -1,7 +1,7 @@
 import type { MatrixClient } from "@vector-im/matrix-bot-sdk";
 import type { CoreConfig } from "../types.js";
 import { getMatrixRuntime } from "../../runtime.js";
-import { getActiveMatrixClient } from "../active-client.js";
+import { getActiveMatrixClient, getAnyActiveMatrixClient } from "../active-client.js";
 import {
   createMatrixClient,
   isBunRuntime,
@@ -28,14 +28,21 @@ export function resolveMediaMaxBytes(): number | undefined {
 export async function resolveMatrixClient(opts: {
   client?: MatrixClient;
   timeoutMs?: number;
+  accountId?: string;
 }): Promise<{ client: MatrixClient; stopOnDone: boolean }> {
   ensureNodeRuntime();
   if (opts.client) {
     return { client: opts.client, stopOnDone: false };
   }
-  const active = getActiveMatrixClient();
+  // Try to get the client for the specific account
+  const active = getActiveMatrixClient(opts.accountId);
   if (active) {
     return { client: active, stopOnDone: false };
+  }
+  // Fall back to any active client for backward compatibility
+  const anyActive = getAnyActiveMatrixClient();
+  if (anyActive) {
+    return { client: anyActive, stopOnDone: false };
   }
   const shouldShareClient = Boolean(process.env.OPENCLAW_GATEWAY_PORT);
   if (shouldShareClient) {
