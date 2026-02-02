@@ -208,44 +208,45 @@ const PATTERNS: Record<string, PatternRule> = {
     category: "staging",
   },
   // Post-injection static patterns
+  // NOTE: Use [^;|&\n]* instead of .* to prevent matching across command separators
   config_tampering: {
     patterns: [
-      // Redirect writes
-      />\s*.*clawdbot\.json/i,
-      />\s*.*openclaw\.json/i,
-      />\s*.*\.clawdbot\//i,
-      />\s*.*\.openclaw\//i,
-      /(echo|cat|printf).*>\s*.*SOUL\.md/i,
-      /(echo|cat|printf).*>\s*.*AGENTS\.md/i,
+      // Redirect writes - use non-greedy match, exclude command separators
+      />\s*[^;|&\n]*clawdbot\.json/i,
+      />\s*[^;|&\n]*openclaw\.json/i,
+      />\s*[^;|&\n]*\.clawdbot\/[^;|&\n]*[^\/\s]/i, // must end with actual file, not just path
+      />\s*[^;|&\n]*\.openclaw\/[^;|&\n]*[^\/\s]/i,
+      /(echo|cat|printf)[^;|&\n]*>\s*[^;|&\n]*SOUL\.md/i,
+      /(echo|cat|printf)[^;|&\n]*>\s*[^;|&\n]*AGENTS\.md/i,
       // cp/mv/tee/install to config paths
-      /(cp|mv|install)\s+.*\s+.*clawdbot\.json/i,
-      /(cp|mv|install)\s+.*\s+.*openclaw\.json/i,
-      /(cp|mv|install)\s+.*\s+.*\.clawdbot\//i,
-      /(cp|mv|install)\s+.*\s+.*\.openclaw\//i,
-      /(cp|mv|install)\s+.*\s+.*SOUL\.md/i,
-      /(cp|mv|install)\s+.*\s+.*AGENTS\.md/i,
-      /tee\s+.*SOUL\.md/i,
-      /tee\s+.*AGENTS\.md/i,
-      /tee\s+.*clawdbot\.json/i,
-      /tee\s+.*openclaw\.json/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*clawdbot\.json/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*openclaw\.json/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.clawdbot\/[^;|&\n]*[^\/\s]/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.openclaw\/[^;|&\n]*[^\/\s]/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*SOUL\.md/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*AGENTS\.md/i,
+      /tee\s+[^;|&\n]*SOUL\.md/i,
+      /tee\s+[^;|&\n]*AGENTS\.md/i,
+      /tee\s+[^;|&\n]*clawdbot\.json/i,
+      /tee\s+[^;|&\n]*openclaw\.json/i,
     ],
     score: 75,
     category: "config_tampering",
   },
   agent_memory_tampering: {
     patterns: [
-      // Redirect writes
-      /(echo|cat|printf).*>\s*.*memory\/.*\.md/i,
-      /(echo|cat|printf).*>>\s*.*MEMORY\.md/i,
-      />\s*.*\.clawdbot\/sessions/i,
-      />\s*.*\.openclaw\/sessions/i,
+      // Redirect writes - use non-greedy match, exclude command separators
+      /(echo|cat|printf)[^;|&\n]*>\s*[^;|&\n]*memory\/[^;|&\n]*\.md/i,
+      /(echo|cat|printf)[^;|&\n]*>>\s*[^;|&\n]*MEMORY\.md/i,
+      />\s*[^;|&\n]*\.clawdbot\/sessions/i,
+      />\s*[^;|&\n]*\.openclaw\/sessions/i,
       // cp/mv/tee to memory paths
-      /(cp|mv|install)\s+.*\s+.*memory\/.*\.md/i,
-      /(cp|mv|install)\s+.*\s+.*MEMORY\.md/i,
-      /(cp|mv|install)\s+.*\s+.*\.clawdbot\/sessions/i,
-      /(cp|mv|install)\s+.*\s+.*\.openclaw\/sessions/i,
-      /tee\s+.*memory\/.*\.md/i,
-      /tee\s+.*MEMORY\.md/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*memory\/[^;|&\n]*\.md/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*MEMORY\.md/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.clawdbot\/sessions/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.openclaw\/sessions/i,
+      /tee\s+[^;|&\n]*memory\/[^;|&\n]*\.md/i,
+      /tee\s+[^;|&\n]*MEMORY\.md/i,
     ],
     score: 55,
     category: "context_manipulation",
