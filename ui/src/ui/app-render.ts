@@ -482,6 +482,9 @@ export function renderApp(state: AppViewState) {
                 onNewSession: () => state.handleSendChat("/new", { restoreDraft: true }),
                 showNewMessages: state.chatNewMessagesBelow,
                 onScrollToBottom: () => state.scrollToBottom(),
+                commandHistory: state.chatCommandHistory,
+                commandHistoryIndex: state.chatCommandHistoryIndex,
+                onSetCommandHistoryIndex: (index) => (state.chatCommandHistoryIndex = index),
                 // Sidebar props for tool output viewing
                 sidebarOpen: state.sidebarOpen,
                 sidebarContent: state.sidebarContent,

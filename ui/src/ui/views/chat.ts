@@ -11,6 +11,7 @@ import {
 } from "../chat/grouped-render";
 import { normalizeMessage, normalizeRoleForGrouping } from "../chat/message-normalizer";
 import { icons } from "../icons";
+import { CHAT_COMMANDS } from "../chat/commands";
 import { renderMarkdownSidebar } from "./markdown-sidebar";
 import "../components/resizable-divider";
 
@@ -56,6 +57,10 @@ export type ChatProps = {
   // Scroll control
   showNewMessages?: boolean;
   onScrollToBottom?: () => void;
+  // History
+  commandHistory?: string[];
+  commandHistoryIndex?: number;
+  onSetCommandHistoryIndex?: (index: number) => void;
   // Event handlers
   onRefresh: () => void;
   onToggleFocusMode: () => void;
@@ -181,6 +186,41 @@ function renderAttachmentPreview(props: ChatProps) {
           </div>
         `,
       )}
+    </div>
+  `;
+}
+
+function renderCommandSuggestions(props: ChatProps) {
+  const draft = props.draft.trim();
+  if (!draft.startsWith("/")) {
+    return nothing;
+  }
+
+  const query = draft.toLowerCase();
+  const suggestions = CHAT_COMMANDS.filter((cmd) => cmd.command.startsWith(query));
+
+  if (suggestions.length === 0) {
+    return nothing;
+  }
+
+  return html`
+    <div class="chat-slash-commands" role="listbox" aria-label="Command suggestions">
+      ${suggestions.map(
+    (cmd) => html`
+          <button
+            class="chat-slash-command-item"
+            type="button"
+            @click=${() => {
+        props.onDraftChange(`${cmd.command} `);
+        const textarea = document.querySelector(".chat-compose textarea") as HTMLTextAreaElement;
+        textarea?.focus();
+      }}
+          >
+            <span class="chat-slash-command-item__cmd">${cmd.command}</span>
+            <span class="chat-slash-command-item__desc">${cmd.description}</span>
+          </button>
+        `,
+  )}
     </div>
   `;
 }
@@ -358,6 +398,7 @@ export function renderChat(props: ChatProps) {
       }
 
       <div class="chat-compose">
+        ${renderCommandSuggestions(props)}
         ${renderAttachmentPreview(props)}
         <div class="chat-compose__row">
           <label class="field chat-compose__field">
@@ -367,23 +408,62 @@ export function renderChat(props: ChatProps) {
               .value=${props.draft}
               ?disabled=${!props.connected}
               @keydown=${(e: KeyboardEvent) => {
-                if (e.key !== "Enter") {
-                  return;
+            if (e.isComposing || e.keyCode === 229) {
+                return;
+            }
+
+            // Handle history navigation
+            if (e.key === "ArrowUp") {
+                if (props.commandHistory && props.commandHistory.length > 0) {
+                const currentIndex = props.commandHistoryIndex ?? -1;
+                const nextIndex = Math.min(currentIndex + 1, props.commandHistory.length - 1);
+                if (nextIndex !== currentIndex) {
+                    e.preventDefault();
+                    props.onSetCommandHistoryIndex?.(nextIndex);
+                    props.onDraftChange(props.commandHistory[nextIndex]);
+                    return;
                 }
-                if (e.isComposing || e.keyCode === 229) {
-                  return;
+                // Attempting to go past end of history, just keep current
+                if (currentIndex === props.commandHistory.length - 1) {
+                    e.preventDefault();
+                    return;
                 }
-                if (e.shiftKey) {
-                  return;
-                } // Allow Shift+Enter for line breaks
-                if (!props.connected) {
-                  return;
                 }
+            }
+
+            if (e.key === "ArrowDown") {
+                const currentIndex = props.commandHistoryIndex ?? -1;
+                if (currentIndex !== -1) {
                 e.preventDefault();
-                if (canCompose) {
-                  props.onSend();
+                const nextIndex = currentIndex - 1;
+                props.onSetCommandHistoryIndex?.(nextIndex);
+                if (nextIndex === -1) {
+                    props.onDraftChange(""); // Or restore original draft if we tracked it
+                } else if (props.commandHistory) {
+                    props.onDraftChange(props.commandHistory[nextIndex]);
                 }
-              }}
+                return;
+                }
+            }
+
+            if (e.key !== "Enter") {
+                return;
+            }
+            if (e.shiftKey) {
+                return;
+            } // Allow Shift+Enter for line breaks
+            if (!props.connected) {
+                return;
+            }
+            e.preventDefault();
+
+            // If a slash command is exactly matched/selected, we could do something special here,
+            // but for now just send it.
+
+            if (canCompose) {
+                props.onSend();
+            }
+            }}
               @input=${(e: Event) => {
                 const target = e.target as HTMLTextAreaElement;
                 adjustTextareaHeight(target);
