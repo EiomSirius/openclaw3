@@ -20,8 +20,9 @@ const ENV_BOT_KEY = "CAMPFIRE_BOT_KEY";
 const ENV_BASE_URL = "CAMPFIRE_BASE_URL";
 
 function listConfiguredAccountIds(cfg: OpenClawConfig): string[] {
-  const accounts = (cfg.channels?.["campfire"] as { accounts?: Record<string, unknown> } | undefined)
-    ?.accounts;
+  const accounts = (
+    cfg.channels?.["campfire"] as { accounts?: Record<string, unknown> } | undefined
+  )?.accounts;
   if (!accounts || typeof accounts !== "object") {
     return [];
   }
@@ -52,18 +53,16 @@ function resolveAccountConfig(
   cfg: OpenClawConfig,
   accountId: string,
 ): CampfireAccountConfig | undefined {
-  const accounts = (cfg.channels?.["campfire"] as { accounts?: Record<string, CampfireAccountConfig> } | undefined)
-    ?.accounts;
+  const accounts = (
+    cfg.channels?.["campfire"] as { accounts?: Record<string, CampfireAccountConfig> } | undefined
+  )?.accounts;
   if (!accounts || typeof accounts !== "object") {
     return undefined;
   }
   return accounts[accountId];
 }
 
-function mergeCampfireAccountConfig(
-  cfg: OpenClawConfig,
-  accountId: string,
-): CampfireAccountConfig {
+function mergeCampfireAccountConfig(cfg: OpenClawConfig, accountId: string): CampfireAccountConfig {
   const raw = (cfg.channels?.["campfire"] ?? {}) as Record<string, unknown>;
   const { accounts: _ignored, defaultAccount: _ignored2, ...base } = raw;
   const account = resolveAccountConfig(cfg, accountId) ?? {};
@@ -115,7 +114,8 @@ export function resolveCampfireAccount(params: {
   accountId?: string | null;
 }): ResolvedCampfireAccount {
   const accountId = normalizeAccountId(params.accountId);
-  const baseEnabled = (params.cfg.channels?.["campfire"] as { enabled?: boolean } | undefined)?.enabled !== false;
+  const baseEnabled =
+    (params.cfg.channels?.["campfire"] as { enabled?: boolean } | undefined)?.enabled !== false;
   const merged = mergeCampfireAccountConfig(params.cfg, accountId);
   const accountEnabled = merged.enabled !== false;
   const enabled = baseEnabled && accountEnabled;

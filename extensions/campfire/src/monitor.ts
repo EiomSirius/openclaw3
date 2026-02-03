@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
-import type { CampfireWebhookPayload } from "./types.js";
 import type { ResolvedCampfireAccount } from "./accounts.js";
+import type { CampfireWebhookPayload } from "./types.js";
 import { sendCampfireMessage, sendCampfireAttachment } from "./api.js";
 import { getCampfireRuntime } from "./runtime.js";
 
@@ -313,7 +313,10 @@ async function processCampfireEvent(payload: CampfireWebhookPayload, target: Web
   }
 
   // Check command authorization
-  const shouldComputeAuth = core.channel.commands.shouldComputeCommandAuthorized(messageText, config);
+  const shouldComputeAuth = core.channel.commands.shouldComputeCommandAuthorized(
+    messageText,
+    config,
+  );
   const commandAllowFrom = groupUsers.map((v) => String(v));
   const useAccessGroups = config.commands?.useAccessGroups !== false;
   const senderAllowedForCommands = isSenderAllowed(senderId, senderName, commandAllowFrom);
@@ -526,14 +529,10 @@ export function monitorCampfireProvider(options: CampfireMonitorOptions): () => 
   return unregister;
 }
 
-export async function startCampfireMonitor(
-  params: CampfireMonitorOptions,
-): Promise<() => void> {
+export async function startCampfireMonitor(params: CampfireMonitorOptions): Promise<() => void> {
   return monitorCampfireProvider(params);
 }
 
-export function resolveCampfireWebhookPath(params: {
-  account: ResolvedCampfireAccount;
-}): string {
+export function resolveCampfireWebhookPath(params: { account: ResolvedCampfireAccount }): string {
   return resolveWebhookPath(params.account.config.webhookPath);
 }

@@ -93,11 +93,7 @@ export async function sendCampfireAttachment(params: {
 
     const footer = `\r\n--${boundary}--\r\n`;
 
-    const body = Buffer.concat([
-      Buffer.from(header, "utf8"),
-      buffer,
-      Buffer.from(footer, "utf8"),
-    ]);
+    const body = Buffer.concat([Buffer.from(header, "utf8"), buffer, Buffer.from(footer, "utf8")]);
 
     const res = await fetch(url.toString(), {
       method: "POST",

@@ -6,7 +6,6 @@ import {
   migrateBaseNameToDefaultAccount,
   missingTargetError,
   normalizeAccountId,
-  PAIRING_APPROVED_MESSAGE,
   resolveChannelMediaMaxBytes,
   setAccountEnabledInConfigSection,
   type ChannelDock,
@@ -125,7 +124,9 @@ export const campfirePlugin: ChannelPlugin<ResolvedCampfireAccount> = {
   security: {
     resolveDmPolicy: ({ cfg, accountId, account }) => {
       const resolvedAccountId = accountId ?? account.accountId ?? DEFAULT_ACCOUNT_ID;
-      const channel = cfg.channels?.["campfire"] as { accounts?: Record<string, unknown> } | undefined;
+      const channel = cfg.channels?.["campfire"] as
+        | { accounts?: Record<string, unknown> }
+        | undefined;
       const useAccountPath = Boolean(channel?.accounts?.[resolvedAccountId]);
       const allowFromPath = useAccountPath
         ? `channels.campfire.accounts.${resolvedAccountId}.dm.`
@@ -243,11 +244,7 @@ export const campfirePlugin: ChannelPlugin<ResolvedCampfireAccount> = {
               channelKey: "campfire",
             })
           : namedConfig;
-      const patch = input.useEnv
-        ? {}
-        : input.token
-          ? { botKey: input.token }
-          : {};
+      const patch = input.useEnv ? {} : input.token ? { botKey: input.token } : {};
       const webhookPath = input.webhookPath?.trim();
       const baseUrl = input.baseUrl?.trim();
       const configPatch = {
@@ -276,9 +273,10 @@ export const campfirePlugin: ChannelPlugin<ResolvedCampfireAccount> = {
             ...((next.channels?.["campfire"] ?? {}) as Record<string, unknown>),
             enabled: true,
             accounts: {
-              ...((next.channels?.["campfire"] as { accounts?: Record<string, unknown> })?.accounts ?? {}),
+              ...(next.channels?.["campfire"] as { accounts?: Record<string, unknown> })?.accounts,
               [accountId]: {
-                ...(((next.channels?.["campfire"] as { accounts?: Record<string, unknown> })?.accounts ?? {})[accountId] ?? {}),
+                ...(next.channels?.["campfire"] as { accounts?: Record<string, unknown> })
+                  ?.accounts?.[accountId],
                 enabled: true,
                 ...configPatch,
               },
@@ -354,10 +352,11 @@ export const campfirePlugin: ChannelPlugin<ResolvedCampfireAccount> = {
         cfg,
         resolveChannelLimitMb: ({ cfg, accountId }) =>
           (
-            (cfg.channels?.["campfire"] as { accounts?: Record<string, { mediaMaxMb?: number }>; mediaMaxMb?: number } | undefined)
-              ?.accounts?.[accountId]?.mediaMaxMb ??
-            (cfg.channels?.["campfire"] as { mediaMaxMb?: number } | undefined)?.mediaMaxMb
-          ),
+            cfg.channels?.["campfire"] as
+              | { accounts?: Record<string, { mediaMaxMb?: number }>; mediaMaxMb?: number }
+              | undefined
+          )?.accounts?.[accountId]?.mediaMaxMb ??
+          (cfg.channels?.["campfire"] as { mediaMaxMb?: number } | undefined)?.mediaMaxMb,
         accountId,
       });
       const loaded = await runtime.channel.media.fetchRemoteMedia(mediaUrl, {
