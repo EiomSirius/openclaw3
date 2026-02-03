@@ -135,7 +135,7 @@ export function installUnhandledRejectionHandler(): void {
       return;
     }
 
-    // Handle AllModelsFailedError - don't crash on cooldown
+    // Handle AllModelsFailedError - only suppress when all in cooldown
     if (isAllModelsFailedError(reason)) {
       if (reason.allInCooldown) {
         const mins = reason.retryAfterMs ? Math.round(reason.retryAfterMs / 60000) : "unknown";
@@ -146,9 +146,9 @@ export function installUnhandledRejectionHandler(): void {
         );
         return; // Don't exit
       }
-      // Mixed failures (not all cooldown) - log but don't crash
+      // Mixed failures (not all cooldown) - fall through to existing fatal/config handling
       console.warn("[openclaw] All models failed (mixed reasons):", formatUncaughtError(reason));
-      return;
+      // Don't return - let existing fatal/config error handlers catch real auth/config issues
     }
 
     if (isFatalError(reason)) {

@@ -301,12 +301,13 @@ export async function runWithModelFallback<T>(params: {
   // Calculate earliest retry time if all in cooldown
   let retryAfterMs: number | undefined;
   if (allCooldown && authStore) {
+    // Derive profileIds from providers actually attempted (not all candidates)
     const profileIds = new Set<string>();
-    for (const candidate of candidates) {
+    for (const attempt of attempts) {
       const profiles = resolveAuthProfileOrder({
         cfg: params.cfg,
         store: authStore,
-        provider: candidate.provider,
+        provider: attempt.provider,
       });
       profiles.forEach((id) => profileIds.add(id));
     }
