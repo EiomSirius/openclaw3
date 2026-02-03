@@ -1,6 +1,22 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readJsonBody } from "./hooks.js";
 
+/**
+ * Apply baseline security headers to every HTTP response.
+ *
+ * These are safe, non-breaking defaults recommended by OWASP:
+ * - X-Content-Type-Options: prevents MIME-sniffing attacks
+ * - X-Frame-Options: mitigates clickjacking when CSP is absent
+ * - Referrer-Policy: limits referrer leakage to same-origin
+ * - Permissions-Policy: disables unused browser features by default
+ */
+export function setSecurityHeaders(res: ServerResponse) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+}
+
 export function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
