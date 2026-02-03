@@ -13,6 +13,7 @@ export type AuthChoiceGroupId =
   | "google"
   | "copilot"
   | "openrouter"
+  | "lmstudio"
   | "ai-gateway"
   | "moonshot"
   | "zai"
@@ -71,6 +72,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     label: "OpenRouter",
     hint: "API key",
     choices: ["openrouter-api-key"],
+  },
+  {
+    value: "lmstudio",
+    label: "LM Studio (local)",
+    hint: "Local OpenAI-compatible server",
+    choices: ["lmstudio"],
   },
   {
     value: "qwen",
