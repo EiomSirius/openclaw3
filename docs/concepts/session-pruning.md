@@ -90,8 +90,10 @@ Default (off):
 
 ```json5
 {
-  agent: {
-    contextPruning: { mode: "off" },
+  agents: {
+    defaults: {
+      contextPruning: { mode: "off" },
+    },
   },
 }
 ```
@@ -100,8 +102,10 @@ Enable TTL-aware pruning:
 
 ```json5
 {
-  agent: {
-    contextPruning: { mode: "cache-ttl", ttl: "5m" },
+  agents: {
+    defaults: {
+      contextPruning: { mode: "cache-ttl", ttl: "5m" },
+    },
   },
 }
 ```
@@ -110,10 +114,12 @@ Restrict pruning to specific tools:
 
 ```json5
 {
-  agent: {
-    contextPruning: {
-      mode: "cache-ttl",
-      tools: { allow: ["exec", "read"], deny: ["*image*"] },
+  agents: {
+    defaults: {
+      contextPruning: {
+        mode: "cache-ttl",
+        tools: { allow: ["exec", "read"], deny: ["*image*"] },
+      },
     },
   },
 }

@@ -79,11 +79,13 @@ Example allowlist config:
 
 ```json5
 {
-  agent: {
-    model: { primary: "anthropic/claude-sonnet-4-5" },
-    models: {
-      "anthropic/claude-sonnet-4-5": { alias: "Sonnet" },
-      "anthropic/claude-opus-4-5": { alias: "Opus" },
+  agents: {
+    defaults: {
+      model: { primary: "anthropic/claude-sonnet-4-5" },
+      models: {
+        "anthropic/claude-sonnet-4-5": { alias: "Sonnet" },
+        "anthropic/claude-opus-4-5": { alias: "Opus" },
+      },
     },
   },
 }

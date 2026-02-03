@@ -2627,11 +2627,13 @@ Use MiniMax M2.1 directly without LM Studio:
 
 ```json5
 {
-  agent: {
-    model: { primary: "minimax/MiniMax-M2.1" },
-    models: {
-      "anthropic/claude-opus-4-5": { alias: "Opus" },
-      "minimax/MiniMax-M2.1": { alias: "Minimax" },
+  agents: {
+    defaults: {
+      model: { primary: "minimax/MiniMax-M2.1" },
+      models: {
+        "anthropic/claude-opus-4-5": { alias: "Opus" },
+        "minimax/MiniMax-M2.1": { alias: "Minimax" },
+      },
     },
   },
   models: {

@@ -142,7 +142,7 @@ Use these in `tools.allow` / `tools.deny`.
 
 Available groups:
 
-- `group:runtime`: `exec`, `bash`, `process`
+- `group:runtime`: `exec`, `process`
 - `group:fs`: `read`, `write`, `edit`, `apply_patch`
 - `group:sessions`: `sessions_list`, `sessions_history`, `sessions_send`, `sessions_spawn`, `session_status`
 - `group:memory`: `memory_search`, `memory_get`
@@ -216,6 +216,7 @@ Manage background exec sessions.
 Core actions:
 
 - `list`, `poll`, `log`, `write`, `kill`, `clear`, `remove`
+- `send-keys` — send special key input to a TTY process (use `keys`, `hex`, or `literal`)
 
 Notes:
 
@@ -269,12 +270,11 @@ Core actions:
 - `act` (UI actions: click/type/press/hover/drag/select/fill/resize/wait/evaluate)
 - `navigate`, `console`, `pdf`, `upload`, `dialog`
 
-Profile management:
+Profiles:
 
-- `profiles` — list all browser profiles with status
-- `create-profile` — create new profile with auto-allocated port (or `cdpUrl`)
-- `delete-profile` — stop browser, delete user data, remove from config (local only)
-- `reset-profile` — kill orphan process on profile's port (local only)
+- `profiles` — list configured browser profiles and their status
+
+Note: profile create/delete/reset is **CLI-only**. Use `openclaw browser ...` commands or edit config to manage profiles.
 
 Common parameters:
 
@@ -388,6 +388,7 @@ Core actions:
 
 Notes:
 
+- Available `message` actions depend on which channel plugins are enabled and what your `tools.profile`/allow/deny policy permits. Some installs only allow `send`/`broadcast`.
 - `send` routes WhatsApp via the Gateway; other channels go direct.
 - `poll` uses the Gateway for WhatsApp and MS Teams; Discord polls go direct.
 - When a message tool call is bound to an active chat session, sends are constrained to that session’s target to avoid cross-context leaks.
@@ -404,6 +405,7 @@ Core actions:
 
 Notes:
 
+- Availability depends on your `tools.profile`/allow/deny policy; many installs disable `cron` for safety.
 - `add` expects a full cron job object (same schema as `cron.add` RPC).
 - `update` uses `{ id, patch }`.
 
@@ -421,8 +423,10 @@ Core actions:
 
 Notes:
 
+- Availability depends on your `tools.profile`/allow/deny policy; many installs disable `gateway` tool access.
 - Use `delayMs` (defaults to 2000) to avoid interrupting an in-flight reply.
 - `restart` is disabled by default; enable with `commands.restart: true`.
+- If the tool is disabled, use the CLI (`openclaw gateway restart`, `openclaw update`) instead.
 
 ### `sessions_list` / `sessions_history` / `sessions_send` / `sessions_spawn` / `session_status`
 

@@ -17,7 +17,7 @@ Examples below are aligned with the current config schema. For the exhaustive re
 
 ```json5
 {
-  agent: { workspace: "~/.openclaw/workspace" },
+  agents: { defaults: { workspace: "~/.openclaw/workspace" } },
   channels: { whatsapp: { allowFrom: ["+15555550123"] } },
 }
 ```
@@ -33,9 +33,11 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
     theme: "helpful assistant",
     emoji: "🦞",
   },
-  agent: {
-    workspace: "~/.openclaw/workspace",
-    model: { primary: "anthropic/claude-sonnet-4-5" },
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace",
+      model: { primary: "anthropic/claude-sonnet-4-5" },
+    },
   },
   channels: {
     whatsapp: {
@@ -429,7 +431,7 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
 
 ```json5
 {
-  agent: { workspace: "~/.openclaw/workspace" },
+  agents: { defaults: { workspace: "~/.openclaw/workspace" } },
   channels: {
     whatsapp: { allowFrom: ["+15555550123"] },
     telegram: {
@@ -466,11 +468,13 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
       anthropic: ["anthropic:subscription", "anthropic:api"],
     },
   },
-  agent: {
-    workspace: "~/.openclaw/workspace",
-    model: {
-      primary: "anthropic/claude-sonnet-4-5",
-      fallbacks: ["anthropic/claude-opus-4-5"],
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace",
+      model: {
+        primary: "anthropic/claude-sonnet-4-5",
+        fallbacks: ["anthropic/claude-opus-4-5"],
+      },
     },
   },
 }
@@ -505,11 +509,13 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
       },
     },
   },
-  agent: {
-    workspace: "~/.openclaw/workspace",
-    model: {
-      primary: "anthropic/claude-opus-4-5",
-      fallbacks: ["minimax/MiniMax-M2.1"],
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace",
+      model: {
+        primary: "anthropic/claude-opus-4-5",
+        fallbacks: ["minimax/MiniMax-M2.1"],
+      },
     },
   },
 }
@@ -523,9 +529,11 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
     name: "WorkBot",
     theme: "professional assistant",
   },
-  agent: {
-    workspace: "~/work-openclaw",
-    elevated: { enabled: false },
+  agents: {
+    defaults: {
+      workspace: "~/work-openclaw",
+      elevated: { enabled: false },
+    },
   },
   channels: {
     slack: {
@@ -544,9 +552,11 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
 
 ```json5
 {
-  agent: {
-    workspace: "~/.openclaw/workspace",
-    model: { primary: "lmstudio/minimax-m2.1-gs32" },
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace",
+      model: { primary: "lmstudio/minimax-m2.1-gs32" },
+    },
   },
   models: {
     mode: "merge",

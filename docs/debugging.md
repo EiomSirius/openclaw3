@@ -75,8 +75,8 @@ What this does:
 
 2. **Dev bootstrap** (`gateway --dev`)
    - Writes a minimal config if missing (`gateway.mode=local`, bind loopback).
-   - Sets `agent.workspace` to the dev workspace.
-   - Sets `agent.skipBootstrap=true` (no BOOTSTRAP.md).
+   - Sets `agents.defaults.workspace` to the dev workspace.
+   - Sets `agents.defaults.skipBootstrap=true` (no BOOTSTRAP.md).
    - Seeds the workspace files if missing:
      `AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`.
    - Default identity: **C3‑PO** (protocol droid).
