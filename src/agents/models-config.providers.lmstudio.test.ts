@@ -1,10 +1,15 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveImplicitProviders } from "./models-config.providers.js";
 
 describe("LM Studio provider", () => {
+  beforeEach(() => {
+    // Mock fetch to prevent real network calls during tests
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network error")));
+  });
+
   it("should not include lmstudio when no API key is configured", async () => {
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
     const providers = await resolveImplicitProviders({ agentDir });

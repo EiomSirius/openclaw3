@@ -30,7 +30,7 @@ export LMSTUDIO_API_KEY="lm-studio"
 openclaw config set models.providers.lmstudio.apiKey "lm-studio"
 ```
 
-Once enabled, OpenClaw will query `http://127.0.0.1:1234/v1/models` verify connectivity, and register all available models.
+Once enabled, OpenClaw will query `http://127.0.0.1:1234/v1/models` to verify connectivity, and register all available models.
 
 ### Usage
 

@@ -151,10 +151,6 @@ async function discoverOllamaModels(): Promise<ModelDefinitionConfig[]> {
 }
 
 async function discoverLMStudioModels(): Promise<ModelDefinitionConfig[]> {
-  // Skip LM Studio discovery in test environments
-  if (process.env.VITEST || process.env.NODE_ENV === "test") {
-    return [];
-  }
   try {
     const response = await fetch(`${LMSTUDIO_BASE_URL}/models`, {
       signal: AbortSignal.timeout(2000),
