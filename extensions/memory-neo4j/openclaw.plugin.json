@@ -1,5 +1,5 @@
 {
-  "id": "memory-lancedb",
+  "id": "memory-neo4j",
   "kind": "memory",
   "uiHints": {
     "embedding.apiKey": {
@@ -13,10 +13,18 @@
       "placeholder": "text-embedding-3-small",
       "help": "OpenAI embedding model to use"
     },
-    "dbPath": {
-      "label": "Database Path",
-      "placeholder": "~/.openclaw/memory/lancedb",
-      "advanced": true
+    "neo4j.uri": {
+      "label": "Neo4j URI",
+      "placeholder": "bolt://localhost:7687",
+      "help": "Bolt connection URI for your Neo4j instance"
+    },
+    "neo4j.username": {
+      "label": "Neo4j Username",
+      "placeholder": "neo4j"
+    },
+    "neo4j.password": {
+      "label": "Neo4j Password",
+      "sensitive": true
     },
     "autoCapture": {
       "label": "Auto-Capture",
@@ -25,22 +33,6 @@
     "autoRecall": {
       "label": "Auto-Recall",
       "help": "Automatically inject relevant memories into context"
-    },
-    "coreMemory.enabled": {
-      "label": "Core Memory",
-      "help": "Inject core memories as virtual MEMORY.md at session start (replaces MEMORY.md file)"
-    },
-    "coreMemory.maxEntries": {
-      "label": "Max Core Entries",
-      "placeholder": "50",
-      "advanced": true,
-      "help": "Maximum number of core memories to load"
-    },
-    "coreMemory.minImportance": {
-      "label": "Min Core Importance",
-      "placeholder": "0.5",
-      "advanced": true,
-      "help": "Minimum importance threshold for core memories (0-1)"
     }
   },
   "configSchema": {
@@ -61,31 +53,29 @@
         },
         "required": ["apiKey"]
       },
-      "dbPath": {
-        "type": "string"
+      "neo4j": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "uri": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": ["uri"]
       },
       "autoCapture": {
         "type": "boolean"
       },
       "autoRecall": {
         "type": "boolean"
-      },
-      "coreMemory": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "maxEntries": {
-            "type": "number"
-          },
-          "minImportance": {
-            "type": "number"
-          }
-        }
       }
     },
-    "required": ["embedding"]
+    "required": ["embedding", "neo4j"]
   }
 }
