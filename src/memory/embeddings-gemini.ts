@@ -1,4 +1,6 @@
 import type { EmbeddingProvider, EmbeddingProviderOptions } from "./embeddings.js";
+import { getDefaultGeminiKeyRotator } from "../agents/gemini-key-rotator.js";
+import { collectGeminiApiKeys } from "../agents/live-auth-keys.js";
 import { requireApiKey, resolveApiKeyForProvider } from "../agents/model-auth.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
@@ -70,24 +72,71 @@ export async function createGeminiEmbeddingProvider(
   const embedUrl = `${baseUrl}/${client.modelPath}:embedContent`;
   const batchUrl = `${baseUrl}/${client.modelPath}:batchEmbedContents`;
 
-  const embedQuery = async (text: string): Promise<number[]> => {
-    if (!text.trim()) {
-      return [];
+  // Check if multiple keys are available for rotation
+  const geminiKeys = collectGeminiApiKeys();
+  const useRotation = geminiKeys.length > 1;
+  const rotator = useRotation ? getDefaultGeminiKeyRotator() : null;
+
+  /**
+   * Execute a fetch request with optional key rotation.
+   * If multiple keys are configured, uses the rotator for automatic retry on 429 errors.
+   */
+  const executeWithRotation = async <T>(
+    url: string,
+    body: unknown,
+    parseResponse: (res: Response) => Promise<T>,
+  ): Promise<T> => {
+    if (rotator) {
+      return rotator.executeWithRotation(
+        async (apiKey) => {
+          const headers = {
+            ...client.headers,
+            "x-goog-api-key": apiKey,
+          };
+          const res = await fetch(url, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const payload = await res.text();
+            throw new Error(`gemini embeddings failed: ${res.status} ${payload}`);
+          }
+          return parseResponse(res);
+        },
+        {
+          onRetry: ({ key, attempt }) => {
+            debugLog(`gemini embeddings: key rotation attempt ${attempt}`, { key });
+          },
+        },
+      );
     }
-    const res = await fetch(embedUrl, {
+
+    // Single key mode - no rotation
+    const res = await fetch(url, {
       method: "POST",
       headers: client.headers,
-      body: JSON.stringify({
-        content: { parts: [{ text }] },
-        taskType: "RETRIEVAL_QUERY",
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const payload = await res.text();
       throw new Error(`gemini embeddings failed: ${res.status} ${payload}`);
     }
-    const payload = (await res.json()) as { embedding?: { values?: number[] } };
-    return payload.embedding?.values ?? [];
+    return parseResponse(res);
+  };
+
+  const embedQuery = async (text: string): Promise<number[]> => {
+    if (!text.trim()) {
+      return [];
+    }
+    const body = {
+      content: { parts: [{ text }] },
+      taskType: "RETRIEVAL_QUERY",
+    };
+    return executeWithRotation(embedUrl, body, async (res) => {
+      const payload = (await res.json()) as { embedding?: { values?: number[] } };
+      return payload.embedding?.values ?? [];
+    });
   };
 
   const embedBatch = async (texts: string[]): Promise<number[][]> => {
@@ -99,18 +148,12 @@ export async function createGeminiEmbeddingProvider(
       content: { parts: [{ text }] },
       taskType: "RETRIEVAL_DOCUMENT",
     }));
-    const res = await fetch(batchUrl, {
-      method: "POST",
-      headers: client.headers,
-      body: JSON.stringify({ requests }),
+    const body = { requests };
+    return executeWithRotation(batchUrl, body, async (res) => {
+      const payload = (await res.json()) as { embeddings?: Array<{ values?: number[] }> };
+      const embeddings = Array.isArray(payload.embeddings) ? payload.embeddings : [];
+      return texts.map((_, index) => embeddings[index]?.values ?? []);
     });
-    if (!res.ok) {
-      const payload = await res.text();
-      throw new Error(`gemini embeddings failed: ${res.status} ${payload}`);
-    }
-    const payload = (await res.json()) as { embeddings?: Array<{ values?: number[] }> };
-    const embeddings = Array.isArray(payload.embeddings) ? payload.embeddings : [];
-    return texts.map((_, index) => embeddings[index]?.values ?? []);
   };
 
   return {

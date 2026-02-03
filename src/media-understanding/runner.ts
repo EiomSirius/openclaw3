@@ -16,6 +16,8 @@ import type {
   MediaUnderstandingOutput,
   MediaUnderstandingProvider,
 } from "./types.js";
+import { getDefaultGeminiKeyRotator } from "../agents/gemini-key-rotator.js";
+import { collectGeminiApiKeys } from "../agents/live-auth-keys.js";
 import { requireApiKey, resolveApiKeyForProvider } from "../agents/model-auth.js";
 import {
   findModelInCatalog,
@@ -900,14 +902,6 @@ async function runProviderEntry(params: {
       maxBytes,
       timeoutMs,
     });
-    const auth = await resolveApiKeyForProvider({
-      provider: providerId,
-      cfg,
-      profileId: entry.profile,
-      preferredProfile: entry.preferredProfile,
-      agentDir: params.agentDir,
-    });
-    const apiKey = requireApiKey(auth, providerId);
     const providerConfig = cfg.models?.providers?.[providerId];
     const baseUrl = entry.baseUrl ?? params.config?.baseUrl ?? providerConfig?.baseUrl;
     const mergedHeaders = {
@@ -922,6 +916,57 @@ async function runProviderEntry(params: {
       entry,
     });
     const model = entry.model?.trim() || DEFAULT_AUDIO_MODELS[providerId] || entry.model;
+
+    // Check if Google provider with multiple keys for rotation
+    const isGoogleProvider = providerId === "google";
+    const geminiKeys = isGoogleProvider ? collectGeminiApiKeys() : [];
+    const useRotation = isGoogleProvider && geminiKeys.length > 1;
+
+    if (useRotation) {
+      const rotator = getDefaultGeminiKeyRotator();
+      const result = await rotator.executeWithRotation(
+        async (apiKey) => {
+          return provider.transcribeAudio!({
+            buffer: media.buffer,
+            fileName: media.fileName,
+            mime: media.mime,
+            apiKey,
+            baseUrl,
+            headers,
+            model,
+            language:
+              entry.language ?? params.config?.language ?? cfg.tools?.media?.audio?.language,
+            prompt,
+            query: providerQuery,
+            timeoutMs,
+          });
+        },
+        {
+          onRetry: ({ key, attempt }) => {
+            logVerbose(
+              `media-understanding: gemini audio key rotation attempt ${attempt} (key: ${key})`,
+            );
+          },
+        },
+      );
+      return {
+        kind: "audio.transcription",
+        attachmentIndex: params.attachmentIndex,
+        text: trimOutput(result.text, maxChars),
+        provider: providerId,
+        model: result.model ?? model,
+      };
+    }
+
+    // Single key mode
+    const auth = await resolveApiKeyForProvider({
+      provider: providerId,
+      cfg,
+      profileId: entry.profile,
+      preferredProfile: entry.preferredProfile,
+      agentDir: params.agentDir,
+    });
+    const apiKey = requireApiKey(auth, providerId);
     const result = await provider.transcribeAudio({
       buffer: media.buffer,
       fileName: media.fileName,
@@ -960,6 +1005,47 @@ async function runProviderEntry(params: {
       `Video attachment ${params.attachmentIndex + 1} base64 payload ${estimatedBase64Bytes} exceeds ${maxBase64Bytes}`,
     );
   }
+  const providerConfig = cfg.models?.providers?.[providerId];
+
+  // Check if Google provider with multiple keys for rotation
+  const isGoogleProvider = providerId === "google";
+  const geminiKeys = isGoogleProvider ? collectGeminiApiKeys() : [];
+  const useRotation = isGoogleProvider && geminiKeys.length > 1;
+
+  if (useRotation) {
+    const rotator = getDefaultGeminiKeyRotator();
+    const result = await rotator.executeWithRotation(
+      async (apiKey) => {
+        return provider.describeVideo!({
+          buffer: media.buffer,
+          fileName: media.fileName,
+          mime: media.mime,
+          apiKey,
+          baseUrl: providerConfig?.baseUrl,
+          headers: providerConfig?.headers,
+          model: entry.model,
+          prompt,
+          timeoutMs,
+        });
+      },
+      {
+        onRetry: ({ key, attempt }) => {
+          logVerbose(
+            `media-understanding: gemini video key rotation attempt ${attempt} (key: ${key})`,
+          );
+        },
+      },
+    );
+    return {
+      kind: "video.description",
+      attachmentIndex: params.attachmentIndex,
+      text: trimOutput(result.text, maxChars),
+      provider: providerId,
+      model: result.model ?? entry.model,
+    };
+  }
+
+  // Single key mode
   const auth = await resolveApiKeyForProvider({
     provider: providerId,
     cfg,
@@ -968,7 +1054,6 @@ async function runProviderEntry(params: {
     agentDir: params.agentDir,
   });
   const apiKey = requireApiKey(auth, providerId);
-  const providerConfig = cfg.models?.providers?.[providerId];
   const result = await provider.describeVideo({
     buffer: media.buffer,
     fileName: media.fileName,

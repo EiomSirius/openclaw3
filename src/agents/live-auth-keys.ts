@@ -95,3 +95,82 @@ export function isAnthropicBillingError(message: string): boolean {
   }
   return false;
 }
+
+/**
+ * Collect all configured Gemini API keys from environment variables.
+ *
+ * Priority order:
+ * 1. OPENCLAW_LIVE_GEMINI_KEY (single key override)
+ * 2. GEMINI_API_KEYS (comma/semicolon/space-separated list)
+ * 3. GEMINI_API_KEY (single legacy key)
+ * 4. GEMINI_API_KEY_* (prefixed keys e.g. GEMINI_API_KEY_1, GEMINI_API_KEY_2)
+ * 5. GOOGLE_API_KEY (fallback single key)
+ *
+ * Keys are deduplicated.
+ */
+export function collectGeminiApiKeys(): string[] {
+  const forcedSingle = process.env.OPENCLAW_LIVE_GEMINI_KEY?.trim();
+  if (forcedSingle) {
+    return [forcedSingle];
+  }
+
+  const fromList = parseKeyList(process.env.GEMINI_API_KEYS);
+  const fromEnv = collectEnvPrefixedKeys("GEMINI_API_KEY_");
+  const primary = process.env.GEMINI_API_KEY?.trim();
+  const googleFallback = process.env.GOOGLE_API_KEY?.trim();
+
+  const seen = new Set<string>();
+  const add = (value?: string) => {
+    if (!value) {
+      return;
+    }
+    if (seen.has(value)) {
+      return;
+    }
+    seen.add(value);
+  };
+
+  for (const value of fromList) {
+    add(value);
+  }
+  if (primary) {
+    add(primary);
+  }
+  for (const value of fromEnv) {
+    add(value);
+  }
+  if (googleFallback) {
+    add(googleFallback);
+  }
+
+  return Array.from(seen);
+}
+
+/**
+ * Check if an error message indicates a Gemini rate limit or quota exhaustion.
+ */
+export function isGeminiRateLimitError(message: string): boolean {
+  const lower = message.toLowerCase();
+  if (lower.includes("429")) {
+    return true;
+  }
+  if (lower.includes("rate_limit") || lower.includes("rate limit")) {
+    return true;
+  }
+  if (lower.includes("resource_exhausted") || lower.includes("resource exhausted")) {
+    return true;
+  }
+  if (lower.includes("quota exceeded") || lower.includes("quota_exceeded")) {
+    return true;
+  }
+  if (lower.includes("too many requests")) {
+    return true;
+  }
+  if (lower.includes("exceeded your current quota")) {
+    return true;
+  }
+  if (lower.includes("resource has been exhausted")) {
+    return true;
+  }
+  return false;
+}
