@@ -242,6 +242,95 @@ describe("gateway config.patch", () => {
     expect(patchRes.error?.message).toContain("base hash");
   });
 
+  it("strips protected gateway transport fields from patch", async () => {
+    const setId = "req-set-gw-protect";
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: setId,
+        method: "config.set",
+        params: {
+          raw: JSON.stringify({
+            gateway: { mode: "local", auth: { mode: "token", token: "abc" } },
+          }),
+        },
+      }),
+    );
+    const setRes = await onceMessage<{ ok: boolean }>(
+      ws,
+      (o) => o.type === "res" && o.id === setId,
+    );
+    expect(setRes.ok).toBe(true);
+
+    const getId = "req-get-gw-protect";
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: getId,
+        method: "config.get",
+        params: {},
+      }),
+    );
+    const getRes = await onceMessage<{ ok: boolean; payload?: { hash?: string; raw?: string } }>(
+      ws,
+      (o) => o.type === "res" && o.id === getId,
+    );
+    expect(getRes.ok).toBe(true);
+    const baseHash = resolveConfigSnapshotHash({
+      hash: getRes.payload?.hash,
+      raw: getRes.payload?.raw,
+    });
+
+    // Attempt to patch gateway.mode and gateway.remote — should be silently stripped
+    const patchId = "req-patch-gw-protect";
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: patchId,
+        method: "config.patch",
+        params: {
+          raw: JSON.stringify({
+            gateway: {
+              mode: "remote",
+              remote: { sshTarget: "user@host", url: "ws://host:18789" },
+            },
+            channels: { telegram: { botToken: "protected-test" } },
+          }),
+          baseHash,
+        },
+      }),
+    );
+    const patchRes = await onceMessage<{ ok: boolean }>(
+      ws,
+      (o) => o.type === "res" && o.id === patchId,
+    );
+    expect(patchRes.ok).toBe(true);
+
+    // Verify gateway.mode was NOT changed, but the non-protected field was applied
+    const get2Id = "req-get-gw-protect-2";
+    ws.send(
+      JSON.stringify({
+        type: "req",
+        id: get2Id,
+        method: "config.get",
+        params: {},
+      }),
+    );
+    const get2Res = await onceMessage<{
+      ok: boolean;
+      payload?: {
+        config?: {
+          gateway?: { mode?: string; remote?: unknown };
+          channels?: { telegram?: { botToken?: string } };
+        };
+      };
+    }>(ws, (o) => o.type === "res" && o.id === get2Id);
+    expect(get2Res.ok).toBe(true);
+    expect(get2Res.payload?.config?.gateway?.mode).toBe("local");
+    expect(get2Res.payload?.config?.gateway?.remote).toBeUndefined();
+    expect(get2Res.payload?.config?.channels?.telegram?.botToken).toBe("protected-test");
+  });
+
   it("requires base hash for config.set when config exists", async () => {
     const setId = "req-set-3";
     ws.send(

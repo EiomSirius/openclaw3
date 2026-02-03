@@ -11,7 +11,7 @@ import {
   writeConfigFile,
 } from "../../config/config.js";
 import { applyLegacyMigrations } from "../../config/legacy.js";
-import { applyMergePatch } from "../../config/merge-patch.js";
+import { applyMergePatch, stripProtectedGatewayPaths } from "../../config/merge-patch.js";
 import { buildConfigSchema } from "../../config/schema.js";
 import {
   formatDoctorNonInteractiveHint,
@@ -196,7 +196,7 @@ export const configHandlers: GatewayRequestHandlers = {
       undefined,
     );
   },
-  "config.patch": async ({ params, respond }) => {
+  "config.patch": async ({ params, respond, context }) => {
     if (!validateConfigPatchParams(params)) {
       respond(
         false,
@@ -249,7 +249,13 @@ export const configHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    const merged = applyMergePatch(snapshot.config, parsedRes.parsed);
+    const { cleaned: safePatch, stripped } = stripProtectedGatewayPaths(parsedRes.parsed);
+    if (stripped.length > 0) {
+      context?.logGateway.warn(
+        `config.patch: stripped protected gateway fields: ${stripped.join(", ")}`,
+      );
+    }
+    const merged = applyMergePatch(snapshot.config, safePatch);
     const migrated = applyLegacyMigrations(merged);
     const resolved = migrated.next ?? merged;
     const validated = validateConfigObjectWithPlugins(resolved);
