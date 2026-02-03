@@ -355,6 +355,15 @@ export const GoogleChatGroupSchema = z
   })
   .strict();
 
+const GoogleChatKnownSpaceSchema = z
+  .object({
+    spaceId: z.string(),
+    displayName: z.string().optional(),
+    type: z.enum(["DM", "ROOM"]).optional(),
+    lastSeenAt: z.number().optional(),
+  })
+  .strict();
+
 export const GoogleChatAccountSchema = z
   .object({
     name: z.string().optional(),
@@ -390,6 +399,7 @@ export const GoogleChatAccountSchema = z
       .optional(),
     dm: GoogleChatDmSchema.optional(),
     typingIndicator: z.enum(["none", "message", "reaction"]).optional(),
+    knownSpaces: z.record(z.string(), GoogleChatKnownSpaceSchema.optional()).optional(),
   })
   .strict();
 
