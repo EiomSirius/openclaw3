@@ -74,6 +74,24 @@ const TEXT_EXT_MIME = new Map<string, string>([
   [".xml", "application/xml"],
 ]);
 
+/**
+ * Known audio file extensions that should never be embedded as text,
+ * even if they arrive with a text/* MIME type (e.g., from Telegram voice messages).
+ */
+const AUDIO_EXTENSIONS = new Set([
+  ".ogg",
+  ".opus",
+  ".mp3",
+  ".m4a",
+  ".wav",
+  ".flac",
+  ".aac",
+  ".wma",
+  ".webm",
+  ".oga",
+  ".spx",
+]);
+
 const XML_ESCAPE_MAP: Record<string, string> = {
   "<": "&lt;",
   ">": "&gt;",
@@ -324,6 +342,18 @@ function isBinaryMediaMime(mime?: string): boolean {
   return mime.startsWith("image/") || mime.startsWith("audio/") || mime.startsWith("video/");
 }
 
+/**
+ * Checks if a filename has a known audio extension.
+ * Used to prevent audio files with incorrect text/* MIME types from being embedded as text.
+ */
+function hasAudioExtension(filename?: string): boolean {
+  if (!filename) {
+    return false;
+  }
+  const ext = path.extname(filename).toLowerCase();
+  return AUDIO_EXTENSIONS.has(ext);
+}
+
 async function extractFileBlocks(params: {
   attachments: ReturnType<typeof normalizeMediaAttachments>;
   cache: ReturnType<typeof createMediaAttachmentCache>;
@@ -371,6 +401,15 @@ async function extractFileBlocks(params: {
     const rawMime = bufferResult?.mime ?? attachment.mime;
     const normalizedRawMime = normalizeMimeType(rawMime);
     if (!forcedTextMimeResolved && isBinaryMediaMime(normalizedRawMime)) {
+      continue;
+    }
+    // Skip audio files even if they have incorrect text/* MIME type (e.g., Telegram voice messages)
+    if (hasAudioExtension(nameHint)) {
+      if (shouldLogVerbose()) {
+        logVerbose(
+          `media: file attachment skipped (audio extension with text mime) index=${attachment.index} name=${nameHint}`,
+        );
+      }
       continue;
     }
     const utf16Charset = resolveUtf16Charset(bufferResult?.buffer);
