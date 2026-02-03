@@ -24,7 +24,8 @@ import {
   type ResolvedMatrixAccount,
 } from "./matrix/accounts.js";
 import { resolveMatrixAuth } from "./matrix/client.js";
-import { normalizeMatrixAllowList, normalizeMatrixUserId } from "./matrix/monitor/allowlist.js";
+import { importMatrixIndex } from "./matrix/import-mutex.js";
+import { normalizeAllowListLower } from "./matrix/monitor/allowlist.js";
 import { probeMatrix } from "./matrix/probe.js";
 import { sendMessageMatrix } from "./matrix/send.js";
 import { matrixOnboardingAdapter } from "./onboarding.js";
@@ -144,7 +145,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     }),
     resolveAllowFrom: ({ cfg }) =>
       ((cfg as CoreConfig).channels?.matrix?.dm?.allowFrom ?? []).map((entry) => String(entry)),
-    formatAllowFrom: ({ allowFrom }) => normalizeMatrixAllowList(allowFrom),
+    formatAllowFrom: ({ allowFrom }) => normalizeAllowListLower(allowFrom),
   },
   security: {
     resolveDmPolicy: ({ account }) => ({
@@ -153,7 +154,11 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
       policyPath: "channels.matrix.dm.policy",
       allowFromPath: "channels.matrix.dm.allowFrom",
       approveHint: formatPairingApproveHint("matrix"),
-      normalizeEntry: (raw) => normalizeMatrixUserId(raw),
+      normalizeEntry: (raw) =>
+        raw
+          .replace(/^matrix:/i, "")
+          .trim()
+          .toLowerCase(),
     }),
     collectWarnings: ({ account, cfg }) => {
       const defaultGroupPolicy = (cfg as CoreConfig).channels?.defaults?.groupPolicy;
@@ -383,7 +388,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
       probe: snapshot.probe,
       lastProbeAt: snapshot.lastProbeAt ?? null,
     }),
-    probeAccount: async ({ timeoutMs, cfg }) => {
+    probeAccount: async ({ account: _account, timeoutMs, cfg }) => {
       try {
         const auth = await resolveMatrixAuth({ cfg: cfg as CoreConfig });
         return await probeMatrix({
@@ -425,7 +430,8 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
       });
       ctx.log?.info(`[${account.accountId}] starting provider (${account.homeserver ?? "matrix"})`);
       // Lazy import: the monitor pulls the reply pipeline; avoid ESM init cycles.
-      const { monitorMatrixProvider } = await import("./matrix/index.js");
+      // Use serialized import to prevent race conditions during parallel account startup.
+      const { monitorMatrixProvider } = await importMatrixIndex();
       return monitorMatrixProvider({
         runtime: ctx.runtime,
         abortSignal: ctx.abortSignal,

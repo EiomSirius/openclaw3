@@ -23,9 +23,9 @@ import {
   sendTypingMatrix,
 } from "../send.js";
 import {
-  normalizeMatrixAllowList,
   resolveMatrixAllowListMatch,
   resolveMatrixAllowListMatches,
+  normalizeAllowListLower,
 } from "./allowlist.js";
 import { resolveMatrixLocation, type MatrixLocationPayload } from "./location.js";
 import { downloadMatrixMedia } from "./media.js";
@@ -85,6 +85,8 @@ export type MatrixMonitorHandlerParams = {
     roomId: string,
   ) => Promise<{ name?: string; canonicalAlias?: string; altAliases: string[] }>;
   getMemberDisplayName: (roomId: string, userId: string) => Promise<string>;
+  /** Account ID for multi-account routing */
+  accountId?: string | null;
 };
 
 export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParams) {
@@ -110,6 +112,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
     directTracker,
     getRoomInfo,
     getMemberDisplayName,
+    accountId,
   } = params;
 
   return async (roomId: string, event: MatrixRawEvent) => {
@@ -236,9 +239,12 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       const storeAllowFrom = await core.channel.pairing
         .readAllowFromStore("matrix")
         .catch(() => []);
-      const effectiveAllowFrom = normalizeMatrixAllowList([...allowFrom, ...storeAllowFrom]);
+      const effectiveAllowFrom = normalizeAllowListLower([...allowFrom, ...storeAllowFrom]);
       const groupAllowFrom = cfg.channels?.matrix?.groupAllowFrom ?? [];
-      const effectiveGroupAllowFrom = normalizeMatrixAllowList(groupAllowFrom);
+      const effectiveGroupAllowFrom = normalizeAllowListLower([
+        ...groupAllowFrom,
+        ...storeAllowFrom,
+      ]);
       const groupAllowConfigured = effectiveGroupAllowFrom.length > 0;
 
       if (isDirectMessage) {
@@ -249,6 +255,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
           const allowMatch = resolveMatrixAllowListMatch({
             allowList: effectiveAllowFrom,
             userId: senderId,
+            userName: senderName,
           });
           const allowMatchMeta = formatAllowlistMatchMeta(allowMatch);
           if (!allowMatch.allowed) {
@@ -293,8 +300,9 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       const roomUsers = roomConfig?.users ?? [];
       if (isRoom && roomUsers.length > 0) {
         const userMatch = resolveMatrixAllowListMatch({
-          allowList: normalizeMatrixAllowList(roomUsers),
+          allowList: normalizeAllowListLower(roomUsers),
           userId: senderId,
+          userName: senderName,
         });
         if (!userMatch.allowed) {
           logVerboseMessage(
@@ -309,6 +317,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         const groupAllowMatch = resolveMatrixAllowListMatch({
           allowList: effectiveGroupAllowFrom,
           userId: senderId,
+          userName: senderName,
         });
         if (!groupAllowMatch.allowed) {
           logVerboseMessage(
@@ -337,6 +346,13 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
           ? content.file
           : undefined;
       const mediaUrl = contentUrl ?? contentFile?.url;
+
+      // DEBUG: Log media detection
+      const msgtype = "msgtype" in content ? content.msgtype : undefined;
+      logVerboseMessage(
+        `matrix: content check msgtype=${msgtype} contentUrl=${contentUrl ?? "none"} mediaUrl=${mediaUrl ?? "none"} rawBody="${rawBody.slice(0, 50)}"`,
+      );
+
       if (!rawBody && !mediaUrl) {
         return;
       }
@@ -348,6 +364,9 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       const contentType = contentInfo?.mimetype;
       const contentSize = typeof contentInfo?.size === "number" ? contentInfo.size : undefined;
       if (mediaUrl?.startsWith("mxc://")) {
+        logVerboseMessage(
+          `matrix: attempting media download url=${mediaUrl} size=${contentSize ?? "unknown"} maxBytes=${mediaMaxBytes}`,
+        );
         try {
           media = await downloadMatrixMedia({
             client,
@@ -357,9 +376,12 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
             maxBytes: mediaMaxBytes,
             file: contentFile,
           });
+          logVerboseMessage(`matrix: media download success path=${media?.path ?? "none"}`);
         } catch (err) {
           logVerboseMessage(`matrix: media download failed: ${String(err)}`);
         }
+      } else if (mediaUrl) {
+        logVerboseMessage(`matrix: skipping non-mxc media url=${mediaUrl}`);
       }
 
       const bodyText = rawBody || media?.placeholder || "";
@@ -381,18 +403,21 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       const senderAllowedForCommands = resolveMatrixAllowListMatches({
         allowList: effectiveAllowFrom,
         userId: senderId,
+        userName: senderName,
       });
       const senderAllowedForGroup = groupAllowConfigured
         ? resolveMatrixAllowListMatches({
             allowList: effectiveGroupAllowFrom,
             userId: senderId,
+            userName: senderName,
           })
         : false;
       const senderAllowedForRoomUsers =
         isRoom && roomUsers.length > 0
           ? resolveMatrixAllowListMatches({
-              allowList: normalizeMatrixAllowList(roomUsers),
+              allowList: normalizeAllowListLower(roomUsers),
               userId: senderId,
+              userName: senderName,
             })
           : false;
       const hasControlCommandInMessage = core.channel.text.hasControlCommand(bodyText, cfg);
@@ -452,6 +477,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       const route = core.channel.routing.resolveAgentRoute({
         cfg,
         channel: "matrix",
+        accountId: accountId ?? undefined,
         peer: {
           kind: isDirectMessage ? "dm" : "channel",
           id: isDirectMessage ? senderId : roomId,
@@ -554,7 +580,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
           }),
         );
       if (shouldAckReaction() && messageId) {
-        reactMatrixMessage(roomId, messageId, ackReaction, client).catch((err) => {
+        reactMatrixMessage(roomId, messageId, ackReaction, { client }).catch((err) => {
           logVerboseMessage(`matrix react failed for room ${roomId}: ${String(err)}`);
         });
       }

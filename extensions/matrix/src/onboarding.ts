@@ -278,7 +278,7 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
 
     if (!accessToken && !password) {
       // Ask auth method FIRST before asking for user ID
-      const authMode = await prompter.select({
+      const authMode = await prompter.select<"token" | "password">({
         message: "Matrix auth method",
         options: [
           { value: "token", label: "Access token (user ID fetched automatically)" },

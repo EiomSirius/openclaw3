@@ -13,22 +13,22 @@ beforeEach(async () => {
 describe("resolveMatrixRoomId", () => {
   it("uses m.direct when available", async () => {
     const userId = "@user:example.org";
+    const getJoinedRooms = vi.fn();
+    const setAccountData = vi.fn();
     const client = {
       getAccountData: vi.fn().mockResolvedValue({
         [userId]: ["!room:example.org"],
       }),
-      getJoinedRooms: vi.fn(),
+      getJoinedRooms,
       getJoinedRoomMembers: vi.fn(),
-      setAccountData: vi.fn(),
+      setAccountData,
     } as unknown as MatrixClient;
 
     const roomId = await resolveMatrixRoomId(client, userId);
 
     expect(roomId).toBe("!room:example.org");
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(client.getJoinedRooms).not.toHaveBeenCalled();
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(client.setAccountData).not.toHaveBeenCalled();
+    expect(getJoinedRooms).not.toHaveBeenCalled();
+    expect(setAccountData).not.toHaveBeenCalled();
   });
 
   it("falls back to joined rooms and persists m.direct", async () => {
