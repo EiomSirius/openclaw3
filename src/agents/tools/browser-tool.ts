@@ -26,7 +26,8 @@ import {
 } from "../../browser/constants.js";
 import { loadConfig } from "../../config/config.js";
 import { saveMediaBuffer } from "../../media/store.js";
-import { wrapWebContent } from "../../security/external-content.js";
+import { wrapExternalContent } from "../../security/external-content.js";
+import { canUseAtlas, runAtlasPrompt } from "./atlas.js";
 import { BrowserToolSchema } from "./browser-tool.schema.js";
 import {
   type AnyAgentTool,
@@ -37,7 +38,6 @@ import {
 } from "./common.js";
 import { callGatewayTool } from "./gateway.js";
 import { listNodes, resolveNodeIdFromList, type NodeListNode } from "./nodes-utils.js";
-import { canUseAtlas, runAtlasPrompt } from "./atlas.js";
 
 type BrowserProxyFile = {
   path: string;
@@ -748,7 +748,10 @@ export function createBrowserTool(opts?: {
           const raw = result.text.trim();
           const trimmed = maxChars === undefined ? raw : raw.slice(0, maxChars);
           const truncated = maxChars !== undefined ? raw.length > maxChars : false;
-          const wrapped = wrapWebContent(trimmed, "web_fetch");
+          const wrapped = wrapExternalContent(trimmed, {
+            source: "browser",
+            includeWarning: true,
+          });
 
           return jsonResult({
             ok: true,

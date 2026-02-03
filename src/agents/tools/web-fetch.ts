@@ -5,8 +5,8 @@ import { fetchWithSsrFGuard } from "../../infra/net/fetch-guard.js";
 import { resolvePinnedHostname, SsrFBlockedError } from "../../infra/net/ssrf.js";
 import { wrapExternalContent, wrapWebContent } from "../../security/external-content.js";
 import { stringEnum } from "../schema/typebox.js";
-import { jsonResult, readNumberParam, readStringParam } from "./common.js";
 import { canUseAtlas, runAtlasPrompt } from "./atlas.js";
+import { jsonResult, readNumberParam, readStringParam } from "./common.js";
 import {
   extractReadableContent,
   htmlToMarkdown,
@@ -782,7 +782,10 @@ export function createWebFetchTool(options?: {
       const url = readStringParam(params, "url", { required: true });
       const extractMode = readStringParam(params, "extractMode") === "text" ? "text" : "markdown";
       const maxChars = readNumberParam(params, "maxChars", { integer: true });
-      const resolvedMaxChars = resolveMaxChars(maxChars ?? fetch?.maxChars, DEFAULT_FETCH_MAX_CHARS);
+      const resolvedMaxChars = resolveMaxChars(
+        maxChars ?? fetch?.maxChars,
+        DEFAULT_FETCH_MAX_CHARS,
+      );
       const timeoutSeconds = resolveTimeoutSeconds(fetch?.timeoutSeconds, DEFAULT_TIMEOUT_SECONDS);
       const cacheTtlMs = resolveCacheTtlMs(fetch?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES);
 

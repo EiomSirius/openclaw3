@@ -1,6 +1,6 @@
 import type { Locator, Page } from "playwright-core";
-import type { OpenClawConfig } from "../../config/config.js";
 import type { ResolvedBrowserProfile } from "../../browser/config.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import { browserStart, browserStatus } from "../../browser/client.js";
 import { resolveBrowserConfig, resolveProfile } from "../../browser/config.js";
 import { DEFAULT_ATLAS_BROWSER_PROFILE_NAME } from "../../browser/constants.js";
@@ -32,10 +32,7 @@ export function resolveAtlasProfile(config?: OpenClawConfig): ResolvedBrowserPro
   return profile ?? null;
 }
 
-export function canUseAtlas(options?: {
-  config?: OpenClawConfig;
-  sandboxed?: boolean;
-}): boolean {
+export function canUseAtlas(options?: { config?: OpenClawConfig; sandboxed?: boolean }): boolean {
   if (
     process.env.NODE_ENV === "test" ||
     process.env.VITEST ||
@@ -78,8 +75,8 @@ async function findPromptInput(page: Page, timeoutMs: number): Promise<Locator> 
   const deadline = Date.now() + Math.max(2000, timeoutMs);
   const selectors = [
     "textarea#prompt-textarea",
-    "textarea[data-testid=\"prompt-textarea\"]",
-    "textarea[placeholder*=\"Message\"]",
+    'textarea[data-testid="prompt-textarea"]',
+    'textarea[placeholder*="Message"]',
     "textarea",
   ];
 
@@ -140,11 +137,7 @@ async function waitForAssistantMessage(
   return messages.nth(count - 1);
 }
 
-async function readStableText(
-  page: Page,
-  locator: Locator,
-  timeoutMs: number,
-): Promise<string> {
+async function readStableText(page: Page, locator: Locator, timeoutMs: number): Promise<string> {
   const start = Date.now();
   let last = "";
   let stableTicks = 0;

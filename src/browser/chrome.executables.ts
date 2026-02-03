@@ -515,10 +515,7 @@ export function findChromeExecutableMac(): BrowserExecutable | null {
     },
     {
       kind: "chromium",
-      path: path.join(
-        os.homedir(),
-        "Applications/ChatGPT Atlas.app/Contents/MacOS/ChatGPT Atlas",
-      ),
+      path: path.join(os.homedir(), "Applications/ChatGPT Atlas.app/Contents/MacOS/ChatGPT Atlas"),
     },
   ];
 
@@ -623,10 +620,7 @@ export function findAtlasExecutableMac(): BrowserExecutable | null {
     },
     {
       kind: "chromium",
-      path: path.join(
-        os.homedir(),
-        "Applications/ChatGPT Atlas.app/Contents/MacOS/ChatGPT Atlas",
-      ),
+      path: path.join(os.homedir(), "Applications/ChatGPT Atlas.app/Contents/MacOS/ChatGPT Atlas"),
     },
   ];
   return findFirstExecutable(candidates);

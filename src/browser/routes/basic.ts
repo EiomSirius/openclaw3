@@ -72,8 +72,7 @@ export function registerBrowserBasicRoutes(app: BrowserRouteRegistrar, ctx: Brow
       color: profileCtx.profile.color,
       headless: current.resolved.headless,
       noSandbox: current.resolved.noSandbox,
-      executablePath:
-        profileCtx.profile.executablePath ?? current.resolved.executablePath ?? null,
+      executablePath: profileCtx.profile.executablePath ?? current.resolved.executablePath ?? null,
       attachOnly: current.resolved.attachOnly,
     });
   });

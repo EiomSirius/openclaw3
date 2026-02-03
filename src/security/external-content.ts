@@ -67,6 +67,7 @@ export type ExternalContentSource =
   | "email"
   | "webhook"
   | "api"
+  | "browser"
   | "web_search"
   | "web_fetch"
   | "unknown";
@@ -75,6 +76,7 @@ const EXTERNAL_SOURCE_LABELS: Record<ExternalContentSource, string> = {
   email: "Email",
   webhook: "Webhook",
   api: "API",
+  browser: "Browser",
   web_search: "Web Search",
   web_fetch: "Web Fetch",
   unknown: "External",
