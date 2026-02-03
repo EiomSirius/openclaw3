@@ -34,6 +34,10 @@ Docs: https://docs.openclaw.ai
 - Docs: finish renaming the QMD memory docs to reference the OpenClaw state dir.
 - Tests: stub SSRF DNS pinning in web auto-reply + Gemini video coverage. (#6619) Thanks @joshp123.
 
+### Changes
+
+- Telegram: inherit forum topic bindings from parent group for routing. Forum topics now automatically use their parent group's agent binding when no direct topic binding exists.
+
 ## 2026.2.1
 
 ### Changes

@@ -458,11 +458,14 @@ export function createTelegramBot(opts: TelegramBotOptions) {
       // Resolve agent route for session
       const isGroup = reaction.chat.type === "group" || reaction.chat.type === "supergroup";
       const peerId = isGroup ? buildTelegramGroupPeerId(chatId, resolvedThreadId) : String(chatId);
+      // For forum topics, provide parent group peer for binding inheritance
+      const parentPeerId = isGroup && resolvedThreadId ? String(chatId) : null;
       const route = resolveAgentRoute({
         cfg,
         channel: "telegram",
         accountId: account.accountId,
         peer: { kind: isGroup ? "group" : "dm", id: peerId },
+        parentPeer: parentPeerId ? { kind: "group", id: parentPeerId } : null,
       });
       const baseSessionKey = route.sessionKey;
       // DMs: use raw messageThreadId for thread sessions (not resolvedThreadId which is for forums)

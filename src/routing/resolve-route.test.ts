@@ -409,3 +409,78 @@ describe("parentPeer binding inheritance (thread support)", () => {
     expect(route.matchedBy).toBe("default");
   });
 });
+
+describe("Telegram forum topic parent binding inheritance", () => {
+  test("forum topic inherits binding from parent group", () => {
+    const cfg: MoltbotConfig = {
+      bindings: [
+        {
+          agentId: "coder",
+          match: {
+            channel: "telegram",
+            peer: { kind: "group", id: "-1003726751869" },
+          },
+        },
+      ],
+    };
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "telegram",
+      peer: { kind: "group", id: "-1003726751869:topic:42" },
+      parentPeer: { kind: "group", id: "-1003726751869" },
+    });
+    expect(route.agentId).toBe("coder");
+    expect(route.matchedBy).toBe("binding.peer.parent");
+  });
+
+  test("direct topic binding wins over parent group binding", () => {
+    const cfg: MoltbotConfig = {
+      bindings: [
+        {
+          agentId: "topic-specific-agent",
+          match: {
+            channel: "telegram",
+            peer: { kind: "group", id: "-1003726751869:topic:42" },
+          },
+        },
+        {
+          agentId: "coder",
+          match: {
+            channel: "telegram",
+            peer: { kind: "group", id: "-1003726751869" },
+          },
+        },
+      ],
+    };
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "telegram",
+      peer: { kind: "group", id: "-1003726751869:topic:42" },
+      parentPeer: { kind: "group", id: "-1003726751869" },
+    });
+    expect(route.agentId).toBe("topic-specific-agent");
+    expect(route.matchedBy).toBe("binding.peer");
+  });
+
+  test("non-forum group without parentPeer matches directly", () => {
+    const cfg: MoltbotConfig = {
+      bindings: [
+        {
+          agentId: "coder",
+          match: {
+            channel: "telegram",
+            peer: { kind: "group", id: "-1003726751869" },
+          },
+        },
+      ],
+    };
+    const route = resolveAgentRoute({
+      cfg,
+      channel: "telegram",
+      peer: { kind: "group", id: "-1003726751869" },
+      parentPeer: null,
+    });
+    expect(route.agentId).toBe("coder");
+    expect(route.matchedBy).toBe("binding.peer");
+  });
+});
