@@ -107,6 +107,7 @@ export async function runTui(opts: TuiOptions) {
   let statusTimer: NodeJS.Timeout | null = null;
   let statusStartedAt: number | null = null;
   let lastActivityStatus = activityStatus;
+  let sessionInfoRefreshTimer: NodeJS.Timeout | null = null;
 
   const state: TuiStateAccess = {
     get agentDefaultId() {
@@ -570,6 +571,15 @@ export async function runTui(opts: TuiOptions) {
   editor.onEscape = () => {
     void abortActive();
   };
+  const cleanupAndExit = () => {
+    if (sessionInfoRefreshTimer) {
+      clearInterval(sessionInfoRefreshTimer);
+      sessionInfoRefreshTimer = null;
+    }
+    client.stop();
+    tui.stop();
+    process.exit(0);
+  };
   editor.onCtrlC = () => {
     const now = Date.now();
     if (editor.getText().trim().length > 0) {
@@ -579,18 +589,14 @@ export async function runTui(opts: TuiOptions) {
       return;
     }
     if (now - lastCtrlCAt < 1000) {
-      client.stop();
-      tui.stop();
-      process.exit(0);
+      cleanupAndExit();
     }
     lastCtrlCAt = now;
     setActivityStatus("press ctrl+c again to exit");
     tui.requestRender();
   };
   editor.onCtrlD = () => {
-    client.stop();
-    tui.stop();
-    process.exit(0);
+    cleanupAndExit();
   };
   editor.onCtrlO = () => {
     toolsExpanded = !toolsExpanded;
@@ -626,6 +632,14 @@ export async function runTui(opts: TuiOptions) {
     const reconnected = wasDisconnected;
     wasDisconnected = false;
     setConnectionStatus("connected");
+    // Start periodic session info refresh (every 30s) to pick up config changes
+    if (!sessionInfoRefreshTimer) {
+      sessionInfoRefreshTimer = setInterval(() => {
+        if (isConnected && activityStatus === "idle") {
+          void refreshSessionInfo();
+        }
+      }, 30_000);
+    }
     void (async () => {
       await refreshAgents();
       updateHeader();
@@ -645,6 +659,11 @@ export async function runTui(opts: TuiOptions) {
     isConnected = false;
     wasDisconnected = true;
     historyLoaded = false;
+    // Stop periodic session info refresh
+    if (sessionInfoRefreshTimer) {
+      clearInterval(sessionInfoRefreshTimer);
+      sessionInfoRefreshTimer = null;
+    }
     const reasonLabel = reason?.trim() ? reason.trim() : "closed";
     setConnectionStatus(`gateway disconnected: ${reasonLabel}`, 5000);
     setActivityStatus("idle");
