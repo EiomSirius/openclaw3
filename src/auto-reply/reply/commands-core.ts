@@ -100,6 +100,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
           sessionKey: params.sessionKey,
           accountId: params.ctx.AccountId,
           threadId: params.ctx.MessageThreadId,
+          chatType: params.ctx.ChatType,
           cfg: params.cfg,
         });
       }

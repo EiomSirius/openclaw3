@@ -290,6 +290,44 @@ describe("dispatchReplyFromConfig", () => {
     });
   });
 
+  it("blocks fast-abort replies when sendPolicy denies", async () => {
+    mocks.tryFastAbortFromMessage.mockResolvedValue({
+      handled: true,
+      aborted: true,
+    });
+    const cfg = {
+      session: {
+        sendPolicy: {
+          default: "allow",
+          rules: [
+            {
+              action: "deny",
+              match: { channel: "whatsapp", chatType: "group" },
+            },
+          ],
+        },
+      },
+    } as OpenClawConfig;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "whatsapp",
+      OriginatingChannel: "whatsapp",
+      ChatType: "group",
+      Body: "/stop",
+      SessionKey: "agent:main:whatsapp:group:test",
+    });
+
+    await dispatchReplyFromConfig({
+      ctx,
+      cfg,
+      dispatcher,
+      replyResolver: vi.fn(async () => ({ text: "hi" }) as ReplyPayload),
+    });
+
+    expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
+    expect(mocks.routeReply).not.toHaveBeenCalled();
+  });
+
   it("deduplicates inbound messages by MessageSid and origin", async () => {
     mocks.tryFastAbortFromMessage.mockResolvedValue({
       handled: false,

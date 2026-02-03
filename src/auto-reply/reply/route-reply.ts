@@ -12,7 +12,10 @@ import type { OriginatingChannelType } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolveEffectiveMessagesConfig } from "../../agents/identity.js";
+import { normalizeChatType } from "../../channels/chat-type.js";
 import { normalizeChannelId } from "../../channels/plugins/index.js";
+import { loadSessionStore, resolveStorePath } from "../../config/sessions.js";
+import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import { normalizeReplyPayload } from "./normalize-reply.js";
 
@@ -29,6 +32,8 @@ export type RouteReplyParams = {
   accountId?: string;
   /** Thread id for replies (Telegram topic id or Matrix thread event id). */
   threadId?: string | number;
+  /** Chat type for send policy evaluation (e.g., group vs direct). */
+  chatType?: string;
   /** Config for provider-specific settings. */
   cfg: OpenClawConfig;
   /** Optional abort signal for cooperative cancellation. */
@@ -87,6 +92,28 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
   // Skip empty replies.
   if (!text.trim() && mediaUrls.length === 0) {
     return { ok: true };
+  }
+
+  if (params.sessionKey) {
+    const agentId = resolveSessionAgentId({ sessionKey: params.sessionKey, config: cfg });
+    const storePath = resolveStorePath(cfg.session?.store, { agentId });
+    let entry: ReturnType<typeof loadSessionStore>[string] | undefined;
+    try {
+      const store = loadSessionStore(storePath);
+      entry = store[params.sessionKey.toLowerCase()] ?? store[params.sessionKey];
+    } catch {
+      entry = undefined;
+    }
+    const sendPolicy = resolveSendPolicy({
+      cfg,
+      entry,
+      sessionKey: params.sessionKey,
+      channel,
+      chatType: normalizeChatType(params.chatType) ?? entry?.chatType,
+    });
+    if (sendPolicy === "deny") {
+      return { ok: true };
+    }
   }
 
   if (channel === INTERNAL_MESSAGE_CHANNEL) {
