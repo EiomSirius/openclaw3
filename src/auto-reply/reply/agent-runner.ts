@@ -107,6 +107,9 @@ export async function runReplyAgent(params: {
   const activeSessionStore = sessionStore;
   let activeIsNewSession = isNewSession;
 
+  // Generate unique turn identifier for this agent run (stable across all hook emissions)
+  const turnId = crypto.randomUUID();
+
   const isHeartbeat = opts?.isHeartbeat === true;
   const typingSignals = createTypingSignaler({
     typing,
@@ -408,7 +411,7 @@ export async function runReplyAgent(params: {
             sessionId: followupRun.run.sessionId,
             input: commandBody,
             output: assistantOutput,
-            turnId: Date.now(),
+            turnId,
             senderId: sessionCtx.SenderId,
           });
           await triggerInternalHook(hookEvent);
@@ -544,7 +547,7 @@ export async function runReplyAgent(params: {
           sessionId: followupRun.run.sessionId,
           input: commandBody,
           output: "",
-          turnId: Date.now(),
+          turnId,
           senderId: sessionCtx.SenderId,
         });
         await triggerInternalHook(hookEvent);
@@ -630,7 +633,7 @@ export async function runReplyAgent(params: {
           sessionId: followupRun.run.sessionId,
           input: commandBody,
           output: "",
-          turnId: Date.now(),
+          turnId,
           senderId: sessionCtx.SenderId,
         });
         await triggerInternalHook(hookEvent);
@@ -812,7 +815,7 @@ export async function runReplyAgent(params: {
         sessionId: followupRun.run.sessionId,
         input: commandBody,
         output: assistantOutput,
-        turnId: Date.now(),
+        turnId,
         senderId: sessionCtx.SenderId,
       });
       await triggerInternalHook(hookEvent);
