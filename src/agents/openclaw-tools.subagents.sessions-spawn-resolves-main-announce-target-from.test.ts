@@ -6,6 +6,13 @@ vi.mock("../gateway/call.js", () => ({
   callGateway: (opts: unknown) => callGatewayMock(opts),
 }));
 
+const runAgentStepMock = vi.fn(async () => "announce summary");
+const readLatestAssistantReplyMock = vi.fn(async () => "raw subagent reply");
+vi.mock("./tools/agent-step.js", () => ({
+  readLatestAssistantReply: (...args: unknown[]) => readLatestAssistantReplyMock(...args),
+  runAgentStep: (...args: unknown[]) => runAgentStepMock(...args),
+}));
+
 let configOverride: ReturnType<(typeof import("../config/config.js"))["loadConfig"]> = {
   session: {
     mainKey: "main",
@@ -29,6 +36,8 @@ import { resetSubagentRegistryForTests } from "./subagent-registry.js";
 
 describe("openclaw-tools: subagents", () => {
   beforeEach(() => {
+    runAgentStepMock.mockReset().mockResolvedValue("announce summary");
+    readLatestAssistantReplyMock.mockReset().mockResolvedValue("raw subagent reply");
     configOverride = {
       session: {
         mainKey: "main",
@@ -142,22 +151,21 @@ describe("openclaw-tools: subagents", () => {
     expect(patchParams.key).toBe(childSessionKey);
     expect(patchParams.label).toBe("my-task");
 
-    // Two agent calls: subagent spawn + main agent trigger
+    // One agent call: subagent spawn (announce summary handled via runAgentStep + send)
     const agentCalls = calls.filter((c) => c.method === "agent");
-    expect(agentCalls).toHaveLength(2);
+    expect(agentCalls).toHaveLength(1);
 
     // First call: subagent spawn
     const first = agentCalls[0]?.params as { lane?: string } | undefined;
     expect(first?.lane).toBe("subagent");
 
-    // Second call: main agent trigger (not "Sub-agent announce step." anymore)
-    const second = agentCalls[1]?.params as { sessionKey?: string; message?: string } | undefined;
-    expect(second?.sessionKey).toBe("main");
-    expect(second?.message).toContain("background task");
+    const stepCall = runAgentStepMock.mock.calls[0]?.[0] as
+      | { extraSystemPrompt?: string }
+      | undefined;
+    expect(stepCall?.extraSystemPrompt).toContain("background task");
 
-    // No direct send to external channel (main agent handles delivery)
-    const sendCalls = calls.filter((c) => c.method === "send");
-    expect(sendCalls.length).toBe(0);
+    const deliveryCalls = calls.filter((c) => c.method === "send" || c.method === "chat.inject");
+    expect(deliveryCalls.length).toBe(1);
     expect(childSessionKey?.startsWith("agent:main:subagent:")).toBe(true);
   });
 
