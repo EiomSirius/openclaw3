@@ -52,6 +52,8 @@ async function main() {
     { consumeGatewaySigusr1RestartAuthorization, isGatewaySigusr1RestartExternallyAllowed },
     { defaultRuntime },
     { enableConsoleCapture, setConsoleTimestampPrefix },
+    { formatUncaughtError },
+    { installUnhandledRejectionHandler, isUndiciTlsNullError },
   ] = await Promise.all([
     import("../config/config.js"),
     import("../gateway/server.js"),
@@ -61,11 +63,28 @@ async function main() {
     import("../infra/restart.js"),
     import("../runtime.js"),
     import("../logging.js"),
+    import("../infra/errors.js"),
+    import("../infra/unhandled-rejections.js"),
   ] as const);
 
   enableConsoleCapture();
   setConsoleTimestampPrefix(true);
   setVerbose(hasFlag(args, "--verbose"));
+
+  // Global error handlers to prevent silent crashes from unhandled rejections/exceptions.
+  // These log the error and exit gracefully instead of crashing without trace.
+  // Issue #6201: isTransientNetworkError now suppresses undici TLS setSession null errors.
+  installUnhandledRejectionHandler();
+
+  process.on("uncaughtException", (error) => {
+    // Issue #6201: Suppress undici TLS session null error (race condition during reconnection)
+    if (isUndiciTlsNullError(error)) {
+      console.warn("[openclaw] Suppressed TLS session error:", formatUncaughtError(error));
+      return;
+    }
+    console.error("[openclaw] Uncaught exception:", formatUncaughtError(error));
+    process.exit(1);
+  });
 
   const wsLogRaw = hasFlag(args, "--compact") ? "compact" : argValue(args, "--ws-log");
   const wsLogStyle: GatewayWsLogStyle =

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isAbortError, isTransientNetworkError } from "./unhandled-rejections.js";
+import {
+  isAbortError,
+  isTransientNetworkError,
+  isUndiciTlsNullError,
+} from "./unhandled-rejections.js";
 
 describe("isAbortError", () => {
   it("returns true for error with name AbortError", () => {
@@ -124,5 +128,92 @@ describe("isTransientNetworkError", () => {
   it("returns false for AggregateError with only non-network errors", () => {
     const error = new AggregateError([new Error("regular error")], "Multiple errors");
     expect(isTransientNetworkError(error)).toBe(false);
+  });
+
+  it("returns true for undici TLS session null error (#6201)", () => {
+    const err = new TypeError("Cannot read properties of null (reading 'setSession')");
+    err.stack = `TypeError: Cannot read properties of null (reading 'setSession')
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)
+    at Client.connect (undici/lib/core/connect.js:70:20)`;
+    expect(isTransientNetworkError(err)).toBe(true);
+  });
+});
+
+describe("isUndiciTlsNullError", () => {
+  it("detects TLS session null crash from undici (new message format)", () => {
+    const err = new TypeError("Cannot read properties of null (reading 'setSession')");
+    err.stack = `TypeError: Cannot read properties of null (reading 'setSession')
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)
+    at Client.connect (undici/lib/core/connect.js:70:20)`;
+    expect(isUndiciTlsNullError(err)).toBe(true);
+  });
+
+  it("detects TLS session null crash (old message format)", () => {
+    const err = new TypeError("Cannot read property 'setSession' of null");
+    err.stack = `TypeError: Cannot read property 'setSession' of null
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)
+    at Client.connect (undici/lib/core/connect.js:70:20)`;
+    expect(isUndiciTlsNullError(err)).toBe(true);
+  });
+
+  it("detects error with node:_tls_wrap in stack", () => {
+    const err = new TypeError("Cannot read properties of null (reading 'setSession')");
+    err.stack = `TypeError: Cannot read properties of null (reading 'setSession')
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)`;
+    expect(isUndiciTlsNullError(err)).toBe(true);
+  });
+
+  it("rejects error without TLSSocket.setSession in stack", () => {
+    // This was previously accepted but is now rejected to avoid false positives
+    const err = new TypeError("Cannot read properties of null (reading 'setSession')");
+    err.stack = `TypeError: Cannot read properties of null (reading 'setSession')
+    at TLSSocket.doSomething (somewhere:1:1)`;
+    expect(isUndiciTlsNullError(err)).toBe(false);
+  });
+
+  it("rejects error with undici but no TLSSocket.setSession", () => {
+    // Must have TLSSocket.setSession to confirm it's the known race condition
+    const err = new TypeError("Cannot read properties of null (reading 'setSession')");
+    err.stack = `TypeError: Cannot read properties of null (reading 'setSession')
+    at something (undici/lib/core/connect.js:70:20)`;
+    expect(isUndiciTlsNullError(err)).toBe(false);
+  });
+
+  it("rejects unrelated TypeError", () => {
+    const err = new TypeError("foo is not a function");
+    expect(isUndiciTlsNullError(err)).toBe(false);
+  });
+
+  it("rejects TypeError without setSession in message", () => {
+    const err = new TypeError("Cannot read properties of null (reading 'foo')");
+    err.stack = `TypeError: Cannot read properties of null (reading 'foo')
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)`;
+    expect(isUndiciTlsNullError(err)).toBe(false);
+  });
+
+  it("rejects TypeError without null in message", () => {
+    const err = new TypeError("Cannot read properties of undefined (reading 'setSession')");
+    err.stack = `TypeError: Cannot read properties of undefined (reading 'setSession')
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)`;
+    expect(isUndiciTlsNullError(err)).toBe(false);
+  });
+
+  it("rejects TypeError with correct message but unrelated stack", () => {
+    const err = new TypeError("Cannot read properties of null (reading 'setSession')");
+    err.stack = `TypeError: Cannot read properties of null (reading 'setSession')
+    at someRandomFunction (random/file.js:1:1)`;
+    expect(isUndiciTlsNullError(err)).toBe(false);
+  });
+
+  it("rejects non-TypeError errors", () => {
+    const err = new Error("Cannot read properties of null (reading 'setSession')");
+    err.stack = `Error: Cannot read properties of null (reading 'setSession')
+    at TLSSocket.setSession (node:_tls_wrap:1132:16)`;
+    expect(isUndiciTlsNullError(err)).toBe(false);
+  });
+
+  it("returns false for null and undefined", () => {
+    expect(isUndiciTlsNullError(null)).toBe(false);
+    expect(isUndiciTlsNullError(undefined)).toBe(false);
   });
 });
