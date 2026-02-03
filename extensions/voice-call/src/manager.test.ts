@@ -102,4 +102,71 @@ describe("CallManager", () => {
     expect(provider.playTtsCalls).toHaveLength(1);
     expect(provider.playTtsCalls[0]?.text).toBe("Hello there");
   });
+
+  it("rejects anonymous inbound calls when allowlist is enabled", () => {
+    const config = VoiceCallConfigSchema.parse({
+      enabled: true,
+      provider: "plivo",
+      fromNumber: "+15550000000",
+      inboundPolicy: "allowlist",
+      allowFrom: ["+15550001234"],
+    });
+
+    const storePath = path.join(os.tmpdir(), `openclaw-voice-call-test-${Date.now()}`);
+    const manager = new CallManager(config, storePath);
+    manager.initialize(new FakeProvider(), "https://example.com/voice/webhook");
+
+    manager.processEvent({
+      id: "evt-anon",
+      type: "call.initiated",
+      callId: "call-inbound",
+      providerCallId: "provider-1",
+      timestamp: Date.now(),
+      direction: "inbound",
+      from: "anonymous",
+      to: "+15550000000",
+    });
+
+    expect(manager.getCallByProviderCallId("provider-1")).toBeUndefined();
+  });
+
+  it("requires exact match on allowlist numbers", () => {
+    const config = VoiceCallConfigSchema.parse({
+      enabled: true,
+      provider: "plivo",
+      fromNumber: "+15550000000",
+      inboundPolicy: "allowlist",
+      allowFrom: ["+15550001234"],
+    });
+
+    const storePath = path.join(os.tmpdir(), `openclaw-voice-call-test-${Date.now()}`);
+    const manager = new CallManager(config, storePath);
+    manager.initialize(new FakeProvider(), "https://example.com/voice/webhook");
+
+    manager.processEvent({
+      id: "evt-suffix",
+      type: "call.initiated",
+      callId: "call-inbound-2",
+      providerCallId: "provider-2",
+      timestamp: Date.now(),
+      direction: "inbound",
+      from: "+5550001234",
+      to: "+15550000000",
+    });
+
+    expect(manager.getCallByProviderCallId("provider-2")).toBeUndefined();
+
+    manager.processEvent({
+      id: "evt-exact",
+      type: "call.initiated",
+      callId: "call-inbound-3",
+      providerCallId: "provider-3",
+      timestamp: Date.now(),
+      direction: "inbound",
+      from: "+1 (555) 000-1234",
+      to: "+15550000000",
+    });
+
+    expect(manager.getCallByProviderCallId("provider-3")).toBeDefined();
+  });
 });
