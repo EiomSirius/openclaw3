@@ -120,7 +120,10 @@ export function normalizeCronJobInput(
 
   if (options.applyDefaults) {
     if (!next.wakeMode) {
-      next.wakeMode = "next-heartbeat";
+      // One-shot jobs (schedule.kind: "at") should default to "now" for immediate delivery.
+      // Recurring jobs default to "next-heartbeat".
+      const isOneShot = isRecord(next.schedule) && next.schedule.kind === "at";
+      next.wakeMode = isOneShot ? "now" : "next-heartbeat";
     }
     if (!next.sessionTarget && isRecord(next.payload)) {
       const kind = typeof next.payload.kind === "string" ? next.payload.kind : "";
