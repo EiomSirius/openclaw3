@@ -184,7 +184,7 @@ If you don’t have a global install yet, run the onboarding step via `pnpm open
 Gateway (from this repo):
 
 ```bash
-node openclaw.mjs gateway --port 18789 --verbose
+pnpm openclaw gateway --port 18789 --verbose
 ```
 
 ## 7) Verify end-to-end
