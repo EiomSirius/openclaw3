@@ -9,6 +9,7 @@ import type {
 } from "./tui-types.js";
 import {
   formatThinkingLevels,
+  normalizeReasoningLevel,
   normalizeUsageDisplay,
   resolveResponseUsageMode,
 } from "../auto-reply/thinking.js";
@@ -337,15 +338,20 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
       case "reasoning":
         if (!args) {
-          chatLog.addSystem("usage: /reasoning <on|off>");
+          chatLog.addSystem("usage: /reasoning <on|off|stream>");
           break;
         }
         try {
+          const normalized = normalizeReasoningLevel(args);
+          if (!normalized) {
+            chatLog.addSystem("usage: /reasoning <on|off|stream>");
+            break;
+          }
           await client.patchSession({
             key: state.currentSessionKey,
-            reasoningLevel: args,
+            reasoningLevel: normalized,
           });
-          chatLog.addSystem(`reasoning set to ${args}`);
+          chatLog.addSystem(`reasoning set to ${normalized}`);
           await refreshSessionInfo();
         } catch (err) {
           chatLog.addSystem(`reasoning failed: ${String(err)}`);
