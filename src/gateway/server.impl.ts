@@ -343,6 +343,7 @@ export async function startGatewayServer(
     deps,
     canvasRuntime,
     canvasHostEnabled,
+    defaultWorkspaceDir,
     allowCanvasHostInTests: opts.allowCanvasHostInTests,
     logCanvas,
     log,
