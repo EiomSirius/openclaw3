@@ -1,5 +1,6 @@
 import type { TlsOptions } from "node:tls";
 import type { WebSocketServer } from "ws";
+import { timingSafeEqual } from "node:crypto";
 import {
   createServer as createHttpServer,
   type Server as HttpServer,
@@ -60,6 +61,18 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Returns false early only if lengths differ (unavoidable), but actual
+ * comparison of equal-length strings is constant-time.
+ */
+function safeTokenCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
+
 export type HooksRequestHandler = (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
 
 export function createHooksRequestHandler(
@@ -83,7 +96,7 @@ export function createHooksRequestHandler(
     }
 
     const { token, fromQuery } = extractHookToken(req, url);
-    if (!token || token !== hooksConfig.token) {
+    if (!token || !safeTokenCompare(token, hooksConfig.token)) {
       res.statusCode = 401;
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.end("Unauthorized");
