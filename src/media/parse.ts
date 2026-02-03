@@ -17,6 +17,18 @@ function cleanCandidate(raw: string) {
 }
 
 /**
+ * Normalize path for case-insensitive comparison on Windows/macOS.
+ * Assumes default case-insensitive macOS volumes; avoids bypass on HFS+.
+ * Case-sensitive macOS volumes (HFSX) are rare in practice.
+ */
+function normalizeForCompare(p: string): string {
+  if (process.platform === "win32" || process.platform === "darwin") {
+    return p.toLowerCase();
+  }
+  return p;
+}
+
+/**
  * Get all valid temp directory roots.
  * Includes os.tmpdir() and /tmp on POSIX when different.
  */
@@ -39,10 +51,12 @@ function getTempRoots(): Set<string> {
  */
 function isSafeTempPath(candidate: string): boolean {
   const resolved = path.resolve(candidate);
+  const normalizedResolved = normalizeForCompare(resolved);
   const tempRoots = getTempRoots();
 
   for (const tempRoot of tempRoots) {
-    const rel = path.relative(tempRoot, resolved);
+    const normalizedRoot = normalizeForCompare(tempRoot);
+    const rel = path.relative(normalizedRoot, normalizedResolved);
 
     // Valid if:
     // - rel is not empty (candidate is not the temp dir itself)

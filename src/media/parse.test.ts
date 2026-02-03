@@ -71,11 +71,7 @@ describe("splitMediaFromOutput", () => {
       expect(result.mediaUrls?.[0]).toBe(testPath);
     });
 
-    it("accepts paths under /tmp on POSIX", function () {
-      if (path.sep !== "/") {
-        // Skip on Windows
-        return;
-      }
+    it.skipIf(path.sep !== "/")("accepts paths under /tmp on POSIX", () => {
       const testPath = path.join("/tmp", "tts-abc123", "voice.opus");
       const result = splitMediaFromOutput(`MEDIA:${testPath}`);
       expect(result.mediaUrls).toHaveLength(1);
