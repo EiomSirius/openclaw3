@@ -203,3 +203,47 @@ describe("SerperProvider error messages", () => {
     );
   });
 });
+
+describe("extractProviderConfig", () => {
+  it("passes serper config through", () => {
+    const { extractProviderConfig } = __testing;
+    const cfg = extractProviderConfig({
+      enabled: true,
+      provider: "serper",
+      serper: { apiKey: "serper-key" },
+    });
+    expect(cfg.serper).toEqual({ apiKey: "serper-key" });
+  });
+});
+
+describe("extractProviderConfig", () => {
+  const { extractProviderConfig } = __testing;
+
+  it("should extract serper config when present", () => {
+    const searchConfig = {
+      serper: { apiKey: "test-serper-key" },
+    };
+    const config = extractProviderConfig(searchConfig);
+    expect(config.serper).toEqual({ apiKey: "test-serper-key" });
+  });
+
+  it("should return undefined for serper when not present", () => {
+    const searchConfig = {
+      apiKey: "test-brave-key",
+    };
+    const config = extractProviderConfig(searchConfig);
+    expect(config.serper).toBeUndefined();
+  });
+
+  it("should extract all provider configs", () => {
+    const searchConfig = {
+      apiKey: "test-brave-key",
+      serper: { apiKey: "test-serper-key" },
+      perplexity: { apiKey: "test-perplexity-key" },
+    };
+    const config = extractProviderConfig(searchConfig);
+    expect(config.brave).toEqual({ apiKey: "test-brave-key" });
+    expect(config.serper).toEqual({ apiKey: "test-serper-key" });
+    expect(config.perplexity).toEqual({ apiKey: "test-perplexity-key" });
+  });
+});
