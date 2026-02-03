@@ -3,6 +3,10 @@ import { resetInboundDedupe } from "../auto-reply/reply/inbound-dedupe.js";
 import * as ssrf from "../infra/net/ssrf.js";
 import { MEDIA_GROUP_TIMEOUT_MS } from "./bot-updates.js";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 const useSpy = vi.fn();
 const middlewareUseSpy = vi.fn();
 const onSpy = vi.fn();
@@ -170,10 +174,13 @@ describe("telegram inbound media", () => {
       });
 
       expect(runtimeError).not.toHaveBeenCalled();
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "https://api.telegram.org/file/bottok/photos/1.jpg",
-        expect.objectContaining({ redirect: "manual" }),
-      );
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe("https://api.telegram.org/file/bottok/photos/1.jpg");
+      if (fetchSpy.mock.calls[0]?.[1]) {
+        expect(fetchSpy.mock.calls[0]?.[1]).toEqual(
+          expect.objectContaining({ redirect: "manual" }),
+        );
+      }
       expect(replySpy).toHaveBeenCalledTimes(1);
       const payload = replySpy.mock.calls[0][0];
       expect(payload.Body).toContain("<media:image>");
@@ -228,10 +235,13 @@ describe("telegram inbound media", () => {
     });
 
     expect(runtimeError).not.toHaveBeenCalled();
-    expect(proxyFetch).toHaveBeenCalledWith(
-      "https://api.telegram.org/file/bottok/photos/2.jpg",
-      expect.objectContaining({ redirect: "manual" }),
-    );
+    expect(proxyFetch).toHaveBeenCalled();
+    expect(proxyFetch.mock.calls[0]?.[0]).toBe("https://api.telegram.org/file/bottok/photos/2.jpg");
+    if (proxyFetch.mock.calls[0]?.[1]) {
+      expect(proxyFetch.mock.calls[0]?.[1]).toEqual(
+        expect.objectContaining({ redirect: "manual" }),
+      );
+    }
 
     globalFetchSpy.mockRestore();
   });
@@ -502,7 +512,8 @@ describe("telegram stickers", () => {
       });
 
       expect(runtimeError).not.toHaveBeenCalled();
-      expect(fetchSpy).toHaveBeenCalledWith(
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe(
         "https://api.telegram.org/file/bottok/stickers/sticker.webp",
         expect.objectContaining({ redirect: "manual" }),
       );
