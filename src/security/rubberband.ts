@@ -214,15 +214,15 @@ const PATTERNS: Record<string, PatternRule> = {
       // Redirect writes - use non-greedy match, exclude command separators
       />\s*[^;|&\n]*clawdbot\.json/i,
       />\s*[^;|&\n]*openclaw\.json/i,
-      />\s*[^;|&\n]*\.clawdbot\/[^;|&\n]*[^\/\s]/i, // must end with actual file, not just path
-      />\s*[^;|&\n]*\.openclaw\/[^;|&\n]*[^\/\s]/i,
+      />\s*[^;|&\n]*\.clawdbot\/[^;|&\n]*[^/\s]/i, // must end with actual file, not just path
+      />\s*[^;|&\n]*\.openclaw\/[^;|&\n]*[^/\s]/i,
       /(echo|cat|printf)[^;|&\n]*>\s*[^;|&\n]*SOUL\.md/i,
       /(echo|cat|printf)[^;|&\n]*>\s*[^;|&\n]*AGENTS\.md/i,
       // cp/mv/tee/install to config paths
       /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*clawdbot\.json/i,
       /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*openclaw\.json/i,
-      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.clawdbot\/[^;|&\n]*[^\/\s]/i,
-      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.openclaw\/[^;|&\n]*[^\/\s]/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.clawdbot\/[^;|&\n]*[^/\s]/i,
+      /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*\.openclaw\/[^;|&\n]*[^/\s]/i,
       /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*SOUL\.md/i,
       /(cp|mv|install)\s+[^;|&\n]+\s+[^;|&\n]*AGENTS\.md/i,
       /tee\s+[^;|&\n]*SOUL\.md/i,

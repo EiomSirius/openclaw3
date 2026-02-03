@@ -458,7 +458,7 @@ async function notifyUserChannel(
       cfg: opts.cfg,
     });
   } catch (err) {
-    logWarn(`rubberband: failed to notify channel: ${err}`);
+    logWarn(`rubberband: failed to notify channel: ${String(err)}`);
   }
 }
 
@@ -870,18 +870,24 @@ export function createExecTool(
     notifyChannel: boolean;
   }> = {};
   if (defaults?.rubberband) {
-    if (defaults.rubberband.enabled !== undefined) rbConfig.enabled = defaults.rubberband.enabled;
-    if (defaults.rubberband.mode !== undefined) rbConfig.mode = defaults.rubberband.mode;
+    if (defaults.rubberband.enabled !== undefined) {
+      rbConfig.enabled = defaults.rubberband.enabled;
+    }
+    if (defaults.rubberband.mode !== undefined) {
+      rbConfig.mode = defaults.rubberband.mode;
+    }
     if (defaults.rubberband.thresholds) {
       rbConfig.thresholds = {
         alert: defaults.rubberband.thresholds.alert ?? 40,
         block: defaults.rubberband.thresholds.block ?? 60,
       };
     }
-    if (defaults.rubberband.allowedDestinations)
+    if (defaults.rubberband.allowedDestinations) {
       rbConfig.allowedDestinations = defaults.rubberband.allowedDestinations;
-    if (defaults.rubberband.notifyChannel !== undefined)
+    }
+    if (defaults.rubberband.notifyChannel !== undefined) {
       rbConfig.notifyChannel = defaults.rubberband.notifyChannel;
+    }
   }
   const rbNotifyCfg = defaults?.cfg;
   // Derive agentId only when sessionKey is an agent session key.
