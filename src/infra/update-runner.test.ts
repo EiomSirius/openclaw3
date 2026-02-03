@@ -99,6 +99,41 @@ describe("runGatewayUpdate", () => {
     expect(calls.some((call) => call.includes("rebase --abort"))).toBe(true);
   });
 
+  it("does not attempt to restore untracked dist/control-ui/", async () => {
+    await fs.mkdir(path.join(tempDir, ".git"));
+    await fs.writeFile(
+      path.join(tempDir, "package.json"),
+      JSON.stringify({ name: "openclaw", version: "1.0.0", packageManager: "pnpm@8.0.0" }),
+      "utf-8",
+    );
+    const { runner, calls } = createRunner({
+      [`git -C ${tempDir} rev-parse --show-toplevel`]: { stdout: tempDir },
+      [`git -C ${tempDir} rev-parse HEAD`]: { stdout: "abc123" },
+      [`git -C ${tempDir} rev-parse --abbrev-ref HEAD`]: { stdout: "main" },
+      [`git -C ${tempDir} status --porcelain -- :!dist/control-ui/`]: { stdout: "" },
+      [`git -C ${tempDir} rev-parse --abbrev-ref --symbolic-full-name @{upstream}`]: {
+        stdout: "origin/main",
+      },
+      [`git -C ${tempDir} fetch --all --prune --tags`]: { stdout: "" },
+      [`git -C ${tempDir} rev-parse @{upstream}`]: { stdout: "upstream123" },
+      [`git -C ${tempDir} rev-list --max-count=10 upstream123`]: { stdout: "upstream123\n" },
+      [`git -C ${tempDir} rebase upstream123`]: { stdout: "" },
+      "pnpm install": { stdout: "" },
+      "pnpm build": { stdout: "" },
+      "pnpm ui:build": { stdout: "" },
+      "pnpm openclaw doctor --non-interactive": { stdout: "" },
+    });
+
+    const result = await runGatewayUpdate({
+      cwd: tempDir,
+      runCommand: async (argv, _options) => runner(argv),
+      timeoutMs: 5000,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(calls.some((call) => call.includes("checkout -- dist/control-ui/"))).toBe(false);
+  });
+
   it("uses stable tag when beta tag is older than release", async () => {
     await fs.mkdir(path.join(tempDir, ".git"));
     await fs.writeFile(
@@ -120,7 +155,6 @@ describe("runGatewayUpdate", () => {
       "pnpm install": { stdout: "" },
       "pnpm build": { stdout: "" },
       "pnpm ui:build": { stdout: "" },
-      [`git -C ${tempDir} checkout -- dist/control-ui/`]: { stdout: "" },
       "pnpm openclaw doctor --non-interactive": { stdout: "" },
     });
 
