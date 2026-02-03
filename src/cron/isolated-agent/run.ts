@@ -421,7 +421,7 @@ export async function runCronIsolatedAgentTurn(params: {
 
   // Skip delivery for heartbeat-only responses (HEARTBEAT_OK with no real content).
   const ackMaxChars = resolveHeartbeatAckMaxChars(agentCfg);
-  const skipHeartbeatDelivery = deliveryRequested && isHeartbeatOnlyResponse(payloads, ackMaxChars);
+  let skipHeartbeatDelivery = deliveryRequested && isHeartbeatOnlyResponse(payloads, ackMaxChars);
   const skipMessagingToolDelivery =
     deliveryRequested &&
     deliveryMode === "auto" &&
@@ -433,6 +433,16 @@ export async function runCronIsolatedAgentTurn(params: {
         accountId: resolvedDelivery.accountId,
       }),
     );
+
+  // When the agent response is heartbeat-only but delivery was requested,
+  // fall back to delivering the original job message so the user still
+  // receives their reminder/notification.
+  let effectivePayloads = payloads;
+  const originalMessage = params.message?.trim();
+  if (skipHeartbeatDelivery && originalMessage) {
+    effectivePayloads = [{ text: originalMessage }];
+    skipHeartbeatDelivery = false;
+  }
 
   if (deliveryRequested && !skipHeartbeatDelivery && !skipMessagingToolDelivery) {
     if (!resolvedDelivery.to) {
@@ -458,7 +468,7 @@ export async function runCronIsolatedAgentTurn(params: {
         channel: resolvedDelivery.channel,
         to: resolvedDelivery.to,
         accountId: resolvedDelivery.accountId,
-        payloads,
+        payloads: effectivePayloads,
         bestEffort: bestEffortDeliver,
         deps: createOutboundSendDeps(params.deps),
       });

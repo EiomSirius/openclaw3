@@ -446,7 +446,7 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("skips delivery when response is exactly HEARTBEAT_OK", async () => {
+  it("delivers original message when response is exactly HEARTBEAT_OK", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -482,14 +482,16 @@ describe("runCronIsolatedAgentTurn", () => {
         lane: "cron",
       });
 
-      // Job still succeeds, but no delivery happens.
       expect(res.status).toBe("ok");
-      expect(res.summary).toBe("HEARTBEAT_OK");
-      expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
+      expect(deps.sendMessageTelegram).toHaveBeenCalledWith(
+        "123",
+        "do it",
+        expect.objectContaining({ verbose: false }),
+      );
     });
   });
 
-  it("skips delivery when response has HEARTBEAT_OK with short padding", async () => {
+  it("delivers original message when response has HEARTBEAT_OK with short padding", async () => {
     await withTempHome(async (home) => {
       const storePath = await writeSessionStore(home);
       const deps: CliDeps = {
@@ -502,7 +504,8 @@ describe("runCronIsolatedAgentTurn", () => {
         sendMessageSignal: vi.fn(),
         sendMessageIMessage: vi.fn(),
       };
-      // Short junk around HEARTBEAT_OK (<=30 chars) should still skip delivery.
+      // Short junk around HEARTBEAT_OK (<=30 chars) triggers heartbeat filter,
+      // but the original message should still be delivered as fallback.
       vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
         payloads: [{ text: "HEARTBEAT_OK 🦞" }],
         meta: {
@@ -529,7 +532,52 @@ describe("runCronIsolatedAgentTurn", () => {
       });
 
       expect(res.status).toBe("ok");
-      expect(deps.sendMessageWhatsApp).not.toHaveBeenCalled();
+      expect(deps.sendMessageWhatsApp).toHaveBeenCalledWith(
+        "+1234",
+        "do it",
+        expect.objectContaining({ verbose: false }),
+      );
+    });
+  });
+
+  it("skips delivery when heartbeat response and original message is empty", async () => {
+    await withTempHome(async (home) => {
+      const storePath = await writeSessionStore(home);
+      const deps: CliDeps = {
+        sendMessageWhatsApp: vi.fn(),
+        sendMessageTelegram: vi.fn().mockResolvedValue({
+          messageId: "t1",
+          chatId: "123",
+        }),
+        sendMessageDiscord: vi.fn(),
+        sendMessageSignal: vi.fn(),
+        sendMessageIMessage: vi.fn(),
+      };
+      vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+        payloads: [{ text: "HEARTBEAT_OK" }],
+        meta: {
+          durationMs: 5,
+          agentMeta: { sessionId: "s", provider: "p", model: "m" },
+        },
+      });
+
+      const res = await runCronIsolatedAgentTurn({
+        cfg: makeCfg(home, storePath),
+        deps,
+        job: makeJob({
+          kind: "agentTurn",
+          message: " ",
+          deliver: true,
+          channel: "telegram",
+          to: "123",
+        }),
+        message: " ",
+        sessionKey: "cron:job-1",
+        lane: "cron",
+      });
+
+      expect(res.status).toBe("ok");
+      expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
     });
   });
 
