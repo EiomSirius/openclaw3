@@ -69,6 +69,8 @@ that up as `<workspace>/skills` on the next session.
 ## Security notes
 
 - Treat third-party skills as **untrusted code**. Read them before enabling.
+- Use the **`vet-skill`** to scan skills before installation. It checks for prompt injection,
+  API key exfiltration, malicious code, and other threats. Invoke with `/vet-skill <url>`.
 - Prefer sandboxed runs for untrusted inputs and risky tools. See [Sandboxing](/gateway/sandboxing).
 - `skills.entries.*.env` and `skills.entries.*.apiKey` inject secrets into the **host** process
   for that agent turn (not the sandbox). Keep secrets out of prompts and logs.
