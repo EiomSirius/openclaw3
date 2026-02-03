@@ -29,7 +29,7 @@ import {
   normalizeTelegramCommandName,
   TELEGRAM_COMMAND_NAME_PATTERN,
 } from "../config/telegram-custom-commands.js";
-import { danger, logVerbose } from "../globals.js";
+import { danger, warn, logVerbose } from "../globals.js";
 import { getChildLogger } from "../logging.js";
 import { readChannelAllowFromStore } from "../pairing/pairing-store.js";
 import {
@@ -356,6 +356,8 @@ export const registerTelegramNativeCommands = ({
     existingCommands.add(normalized);
     pluginCommands.push({ command: normalized, description });
   }
+  const TELEGRAM_MAX_COMMANDS = 100;
+
   const allCommands: Array<{ command: string; description: string }> = [
     ...nativeCommands.map((command) => ({
       command: command.name,
@@ -365,11 +367,23 @@ export const registerTelegramNativeCommands = ({
     ...customCommands,
   ];
 
-  if (allCommands.length > 0) {
+  if (allCommands.length > TELEGRAM_MAX_COMMANDS) {
+    runtime.log?.(
+      warn(
+        `Telegram limits bots to ${TELEGRAM_MAX_COMMANDS} commands. ` +
+          `${allCommands.length} commands configured; registering first ${TELEGRAM_MAX_COMMANDS}. ` +
+          `Set channels.telegram.commands.skills: false to disable skill command registration.`,
+      ),
+    );
+  }
+
+  const commandsToRegister = allCommands.slice(0, TELEGRAM_MAX_COMMANDS);
+
+  if (commandsToRegister.length > 0) {
     withTelegramApiErrorLogging({
       operation: "setMyCommands",
       runtime,
-      fn: () => bot.api.setMyCommands(allCommands),
+      fn: () => bot.api.setMyCommands(commandsToRegister),
     }).catch(() => {});
 
     if (typeof (bot as unknown as { command?: unknown }).command !== "function") {
