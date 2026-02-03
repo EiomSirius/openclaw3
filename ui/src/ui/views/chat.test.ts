@@ -92,4 +92,85 @@ describe("chat view", () => {
     expect(onNewSession).toHaveBeenCalledTimes(1);
     expect(container.textContent).not.toContain("Stop");
   });
+
+  describe("slash commands", () => {
+    it("shows suggestions when draft starts with /", () => {
+      const container = document.createElement("div");
+      render(
+        renderChat(
+          createProps({
+            draft: "/",
+          }),
+        ),
+        container,
+      );
+
+      const suggestions = container.querySelector(".chat-slash-commands");
+      expect(suggestions).not.toBeNull();
+      const items = container.querySelectorAll(".chat-slash-command-item");
+      expect(items.length).toBeGreaterThan(0);
+    });
+
+    it("hides suggestions when draft does not start with /", () => {
+      const container = document.createElement("div");
+      render(
+        renderChat(
+          createProps({
+            draft: "hello",
+          }),
+        ),
+        container,
+      );
+
+      const suggestions = container.querySelector(".chat-slash-commands");
+      expect(suggestions).toBeNull();
+    });
+
+    it("filters suggestions based on query", () => {
+      const container = document.createElement("div");
+      render(
+        renderChat(
+          createProps({
+            draft: "/sta",
+          }),
+        ),
+        container,
+      );
+
+      const items = container.querySelectorAll(".chat-slash-command-item__cmd");
+      const texts = Array.from(items).map((el) => el.textContent);
+      expect(texts).toContain("/status");
+      expect(texts).not.toContain("/new");
+    });
+  });
+
+  describe("history navigation", () => {
+    it("navigates history with arrow keys", () => {
+      const container = document.createElement("div");
+      const onDraftChange = vi.fn();
+      const onSetCommandHistoryIndex = vi.fn();
+      const history = ["/last", "/first"];
+
+      render(
+        renderChat(
+          createProps({
+            draft: "",
+            commandHistory: history,
+            commandHistoryIndex: -1,
+            onDraftChange,
+            onSetCommandHistoryIndex,
+          }),
+        ),
+        container,
+      );
+
+      const textarea = container.querySelector("textarea");
+      expect(textarea).not.toBeNull();
+
+      // Up arrow -> goes to latest history (index 0)
+      textarea?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+      expect(onSetCommandHistoryIndex).toHaveBeenCalledWith(0);
+      expect(onDraftChange).toHaveBeenCalledWith("/last");
+    });
+  });
 });
