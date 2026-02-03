@@ -38,7 +38,23 @@ export function stop(state: CronServiceState) {
   stopTimer(state);
 }
 
+/**
+ * Returns cron status. Uses fast-path if store is already loaded to avoid
+ * blocking behind long-running job executions.
+ */
 export async function status(state: CronServiceState) {
+  // Fast-path: if store is already loaded, return immediately without lock.
+  // This prevents status calls from timing out during long job executions.
+  if (state.store) {
+    return {
+      enabled: state.deps.cronEnabled,
+      storePath: state.deps.storePath,
+      jobs: state.store.jobs.length,
+      nextWakeAtMs: state.deps.cronEnabled ? (nextWakeAtMs(state) ?? null) : null,
+    };
+  }
+
+  // Store not loaded yet; go through normal locked path.
   return await locked(state, async () => {
     await ensureLoaded(state);
     return {
@@ -50,7 +66,20 @@ export async function status(state: CronServiceState) {
   });
 }
 
+/**
+ * Lists cron jobs. Uses fast-path if store is already loaded to avoid
+ * blocking behind long-running job executions.
+ */
 export async function list(state: CronServiceState, opts?: { includeDisabled?: boolean }) {
+  // Fast-path: if store is already loaded, return immediately without lock.
+  // This prevents list calls from timing out during long job executions.
+  if (state.store) {
+    const includeDisabled = opts?.includeDisabled === true;
+    const jobs = state.store.jobs.filter((j) => includeDisabled || j.enabled);
+    return jobs.toSorted((a, b) => (a.state.nextRunAtMs ?? 0) - (b.state.nextRunAtMs ?? 0));
+  }
+
+  // Store not loaded yet; go through normal locked path.
   return await locked(state, async () => {
     await ensureLoaded(state);
     const includeDisabled = opts?.includeDisabled === true;
