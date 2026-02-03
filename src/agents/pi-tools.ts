@@ -318,6 +318,7 @@ export function createOpenClawCodingTools(options?: {
     ...listChannelAgentTools({ cfg: options?.config }),
     ...createOpenClawTools({
       sandboxBrowserBridgeUrl: sandbox?.browser?.bridgeUrl,
+      sandboxBrowserBridgeAuthToken: sandbox?.browser?.bridgeAuthToken,
       allowHostBrowserControl: sandbox ? sandbox.browserAllowHostControl : true,
       agentSessionKey: options?.sessionKey,
       agentChannel: resolveGatewayMessageChannel(options?.messageProvider),
