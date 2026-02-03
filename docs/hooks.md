@@ -253,15 +253,15 @@ Triggered during session lifecycle when session persistence is enabled (requires
 Triggered during agent execution when session persistence is enabled (requires a valid `sessionKey`):
 
 - **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
-- **`agent:reply`**: After each agent turn completes (user input + assistant response; hooks may add messages)
+- **`agent:reply`**: After each agent turn completes (fires even when output is empty; hooks may add messages)
 - **`agent:flush`**: When memory flush is triggered (context nearing token limit)
 
 **Context for `agent:reply` includes**:
 
 - `sessionId`: Current session ID
 - `input`: User's input message
-- `output`: Assistant's response
-- `turnId`: Timestamp-based turn identifier
+- `output`: Assistant's response (may be empty string)
+- `turnId`: Unique turn identifier
 - `senderId`: ID of the message sender
 
 **Note:** Hooks can add messages to `event.messages` which will be prepended to the agent's response.
