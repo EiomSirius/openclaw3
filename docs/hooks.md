@@ -232,7 +232,7 @@ Triggered when agent commands are issued:
 
 ### Session Events
 
-Triggered during session lifecycle:
+Triggered during session lifecycle when session persistence is enabled (requires a valid `sessionKey`):
 
 - **`session:start`**: When a new session begins (both user-initiated and auto-recovery)
 - **`session:end`**: When the old session is terminated (auto-recovery resets only)
@@ -250,7 +250,7 @@ Triggered during session lifecycle:
 
 ### Agent Events
 
-Triggered during agent execution:
+Triggered during agent execution when session persistence is enabled (requires a valid `sessionKey`):
 
 - **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
 - **`agent:reply`**: After each agent turn completes (user input + assistant response; hooks may add messages)
