@@ -176,7 +176,7 @@ const PATTERNS: Record<string, PatternRule> = {
       /\$\(base64\s+-d/i,
     ],
     score: 40,
-    category: "obfuscation",
+    category: "indirect_execution",
   },
   encoding_sensitive: {
     patterns: [
@@ -262,7 +262,7 @@ const PATTERNS: Record<string, PatternRule> = {
       /python.*socket.*connect/i,
     ],
     score: 90,
-    category: "persistence",
+    category: "reverse_shell",
   },
   reconnaissance: {
     patterns: [

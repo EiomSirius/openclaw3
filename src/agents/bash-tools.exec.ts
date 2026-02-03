@@ -1633,10 +1633,10 @@ export function createExecTool(
         }
       }
 
-      // NOTE: RubberBand check moved earlier in the gateway path to integrate with approval flow.
-      // For non-gateway hosts (sandbox), RubberBand runs here.
+      // NOTE: RubberBand check moved earlier in the gateway and node paths to integrate with approval flow.
+      // For sandbox (and gateway with bypassApprovals), RubberBand runs here.
       // Sandbox ALERT only warns (no approval flow) - sandbox isolation provides defense-in-depth.
-      if (host !== "gateway" || bypassApprovals) {
+      if (host === "sandbox" || (host === "gateway" && bypassApprovals)) {
         const rbOptsSandbox = Object.keys(rbConfig).length > 0 ? { config: rbConfig } : undefined;
         const rbResult: RubberBandResult = analyzeCommand(params.command, rbOptsSandbox);
         if (rbResult.disposition === "BLOCK") {
