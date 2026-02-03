@@ -578,7 +578,7 @@ export function collectSmallModelRiskFindings(params: {
       `\n` +
       "Small models are not recommended for untrusted inputs.",
     remediation:
-      'If you must use small models, enable sandboxing for all sessions (agents.defaults.sandbox.mode="all") and disable web_search/web_fetch/browser (tools.deny=["group:web","browser"]).',
+      'If you must use small models, enable sandboxing for all sessions (agents.defaults.sandbox.mode="all") and disable web_search/web_fetch/browser (tools.deny=["group:web","browser"]). For shared or group-facing rooms, consider routing them through a dedicated public/untrusted agent profile (sandbox.mode="all", workspaceAccess="none", docker.network="none", and high-risk tools denied by default).',
   });
 
   return findings;

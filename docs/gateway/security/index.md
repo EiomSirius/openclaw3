@@ -714,6 +714,99 @@ Common use cases:
 }
 ```
 
+### Public / untrusted agent profile
+
+Use a dedicated **public/untrusted agent** when:
+
+- The agent is reachable by many or unknown users (public groups, “open” DMs).
+- You expect abuse or prompt injection from strangers.
+- The agent should talk in public rooms but **must not** touch your host filesystem, shell, or network.
+
+Recommended profile:
+
+- **Sandbox all sessions** for the public agent (`sandbox.mode: "all"`, `scope: "agent"`).
+- **No host workspace access** from the sandbox (`workspaceAccess: "none"`).
+- **No outbound network from the sandbox** (`sandbox.docker.network: "none"` unless you explicitly need egress).
+- **High‑risk tools denied by default**, keeping only messaging + read‑only/query‑style tools.
+- **No long‑lived memory indexing** for this agent; keep history scoped and prune regularly.
+
+Schema‑accurate example:
+
+```json5
+{
+  agents: {
+    list: [
+      {
+        id: "public",
+        // Dedicated workspace; no host project access
+        workspace: "~/.openclaw/workspace-public",
+
+        // Sandbox everything for this agent
+        sandbox: {
+          mode: "all", // all sessions in Docker
+          scope: "agent",
+          workspaceAccess: "none", // no host workspace mount
+          docker: {
+            network: "none", // no outbound network from sandbox
+          },
+        },
+
+        // Public/untrusted profile: deny high-risk tools by default
+        tools: {
+          // Start from the "messaging" profile, then subtract risky tools
+          profile: "messaging",
+          deny: [
+            // Shell / process / host-style tools
+            "exec",
+            "process",
+            "gateway",
+            "nodes",
+            "cron",
+
+            // Browser + raw web fetch
+            "browser",
+            "web_search",
+            "web_fetch",
+
+            // Generic filesystem / mutation-style tools
+            "write",
+            "edit",
+            "apply_patch",
+            "fs_write",
+            "fs_delete",
+            "image_edit",
+          ],
+        },
+
+        // Memory: avoid long-lived vector memory for public/group agents
+        memorySearch: {
+          enabled: false,
+          // If you later enable this, prefer session-only sources and short retention.
+          experimental: { sessionMemory: false },
+        },
+      },
+    ],
+  },
+
+  // Session behavior (global): keep public/group history shallow and per-sender
+  session: {
+    scope: "per-sender",
+    reset: {
+      mode: "idle",
+      idleMinutes: 60, // reset after an hour of inactivity
+    },
+  },
+}
+```
+
+Notes:
+
+- This profile is **opt-in**: it only applies to the `public` agent you define.
+- You can still run a separate “owner” or “main” agent with full tools + no sandbox.
+- For more on sandbox knobs (`mode`, `scope`, `workspaceAccess`, Docker hardening), see [Sandboxing](/gateway/sandboxing).
+- For tool groups, web tools, and allow/deny precedence, see [Tools](/tools) and [Multi-Agent Sandbox & Tools](/multi-agent-sandbox-tools).
+- For session scoping and history retention patterns, see [Session Management](/concepts/session) and [Configuration](/gateway/configuration).
+
 ## What to Tell Your AI
 
 Include security guidelines in your agent's system prompt:

@@ -540,6 +540,110 @@ Save to `~/.openclaw/openclaw.json` and you can DM the bot from that number.
 }
 ```
 
+### Public / untrusted agent example
+
+For group channels or DMs that are open to many or unknown users, run a **separate public agent** with a locked-down profile, and bind only those risky surfaces to that agent.
+
+This keeps your main agent powerful while giving public rooms a sandboxed, low‑blast‑radius assistant:
+
+```json5
+{
+  // Main/private agent (owner, trusted rooms)
+  agents: {
+    list: [
+      {
+        id: "main",
+        workspace: "~/.openclaw/workspace-main",
+      },
+
+      // Public/untrusted agent: sandboxed, no filesystem/shell tools
+      {
+        id: "public",
+        workspace: "~/.openclaw/workspace-public",
+        sandbox: {
+          mode: "all", // all sessions run in Docker
+          scope: "agent",
+          workspaceAccess: "none", // no host workspace mount
+          docker: {
+            network: "none", // no outbound network from sandbox
+          },
+        },
+        tools: {
+          profile: "messaging",
+          deny: [
+            "exec",
+            "process",
+            "gateway",
+            "nodes",
+            "cron",
+            "browser",
+            "web_search",
+            "web_fetch",
+            "write",
+            "edit",
+            "apply_patch",
+            "fs_write",
+            "fs_delete",
+            "image_edit",
+          ],
+        },
+        memorySearch: {
+          enabled: false,
+          experimental: { sessionMemory: false },
+        },
+      },
+    ],
+  },
+
+  // Session behavior (global): per-sender sessions, idle reset to keep history shallow
+  session: {
+    scope: "per-sender",
+    reset: {
+      mode: "idle",
+      idleMinutes: 60,
+    },
+  },
+
+  // Example: Discord guild with a public channel bound to the public agent
+  channels: {
+    discord: {
+      enabled: true,
+      token: "YOUR_DISCORD_BOT_TOKEN",
+      guilds: {
+        "123456789012345678": {
+          slug: "public-server",
+          requireMention: true,
+          channels: {
+            // Public front door (untrusted): uses the sandboxed public agent
+            public-bot: {
+              allow: true,
+              requireMention: true,
+              agent: "public",
+            },
+            // Private/ops channel: uses the main agent with full tools
+            ops: {
+              allow: true,
+              requireMention: true,
+              agent: "main",
+            },
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+This configuration:
+
+- Keeps your **main agent** unchanged (full tools, no sandbox unless you add one).
+- Routes high‑risk, public surfaces through a **sandboxed public agent** with:
+  - `sandbox.mode: "all"`, `workspaceAccess: "none"`, `docker.network: "none"`.
+  - High‑risk tools (`exec`, `browser`, `web_search`, `web_fetch`, `gateway`, `nodes`, `cron`, etc.) denied by default.
+- Uses global `session` settings to keep shared history shallow and per‑sender.
+
+For more detail on per-agent sandbox and tool policy precedence, see [Multi-Agent Sandbox & Tools](/multi-agent-sandbox-tools) and [Sandboxing](/gateway/sandboxing).
+
 ### Local models only
 
 ```json5
