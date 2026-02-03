@@ -15,10 +15,9 @@ import { cleanToolSchemaForGemini } from "../pi-tools.schema.js";
 import { repairToolUseResultPairing } from "../session-transcript-repair.js";
 import { resolveTranscriptPolicy } from "../transcript-policy.js";
 import { log } from "./logger.js";
-
-const TOOL_RESULT_REPAIR_CUSTOM_TYPE = "tool-result-repair";
 import { describeUnknownError } from "./utils.js";
 
+const TOOL_RESULT_REPAIR_CUSTOM_TYPE = "tool-result-repair";
 const GOOGLE_TURN_ORDERING_CUSTOM_TYPE = "google-turn-ordering-bootstrap";
 const GOOGLE_SCHEMA_UNSUPPORTED_KEYWORDS = new Set([
   "patternProperties",
@@ -382,12 +381,13 @@ export async function sanitizeSessionHistory(params: {
     const repairReport = repairToolUseResultPairing(sanitizedThinking);
     repairedTools = repairReport.messages;
 
-    // Log and mark significant repairs for diagnosis
+    // Log and mark significant repairs for diagnosis (only once per session)
     const hadRepairs =
       repairReport.added.length > 0 ||
       repairReport.droppedOrphanCount > 0 ||
       repairReport.droppedDuplicateCount > 0;
-    if (hadRepairs) {
+    const alreadyMarked = hasToolResultRepairMarker(params.sessionManager);
+    if (hadRepairs && !alreadyMarked) {
       log.warn("session transcript repair applied", {
         sessionId: params.sessionId,
         addedSyntheticResults: repairReport.added.length,
@@ -399,13 +399,11 @@ export async function sanitizeSessionHistory(params: {
       });
 
       // Mark the repair in the session to avoid repeated warnings
-      if (!hasToolResultRepairMarker(params.sessionManager)) {
-        markToolResultRepair(params.sessionManager, {
-          added: repairReport.added.length,
-          droppedOrphan: repairReport.droppedOrphanCount,
-          droppedDuplicate: repairReport.droppedDuplicateCount,
-        });
-      }
+      markToolResultRepair(params.sessionManager, {
+        added: repairReport.added.length,
+        droppedOrphan: repairReport.droppedOrphanCount,
+        droppedDuplicate: repairReport.droppedDuplicateCount,
+      });
     }
   } else {
     repairedTools = sanitizedThinking;
