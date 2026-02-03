@@ -396,12 +396,9 @@ export function sanitizeUserFacingText(text: string): string {
     );
   }
 
-  if (isContextOverflowError(trimmed)) {
-    return (
-      "Context overflow: prompt too large for the model. " +
-      "Try again with less input or a larger-context model."
-    );
-  }
+  // Note: isContextOverflowError check removed - it caused false positives when assistant
+  // mentioned "context overflow" in normal conversation. Real context overflow errors are
+  // already handled by formatAssistantErrorText().
 
   if (isRawApiErrorPayload(trimmed) || isLikelyHttpErrorText(trimmed)) {
     return formatRawAssistantErrorForUi(trimmed);
