@@ -30,6 +30,17 @@ export type SubscribeEmbeddedPiSessionParams = {
   onAssistantMessageStart?: () => void | Promise<void>;
   onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void | Promise<void>;
   enforceFinalTag?: boolean;
+  /**
+   * Callback invoked when a tool validation loop is detected.
+   * The caller should abort the current turn to prevent token burn.
+   * @see https://github.com/openclaw/openclaw/issues/7500
+   */
+  onValidationLoopDetected?: (reason: string) => void;
+  /**
+   * Threshold for consecutive tool validation failures before triggering abort.
+   * Defaults to 3.
+   */
+  validationLoopThreshold?: number;
 };
 
 export type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";

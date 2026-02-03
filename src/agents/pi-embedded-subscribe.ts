@@ -16,6 +16,7 @@ import {
 } from "./pi-embedded-helpers.js";
 import { createEmbeddedPiSessionEventHandler } from "./pi-embedded-subscribe.handlers.js";
 import { formatReasoningMessage } from "./pi-embedded-utils.js";
+import { createToolValidationLoopState } from "./tool-validation-loop-detection.js";
 
 const THINKING_TAG_SCAN_RE = /<\s*(\/?)\s*(?:think(?:ing)?|thought|antthinking)\s*>/gi;
 const FINAL_TAG_SCAN_RE = /<\s*(\/?)\s*final\s*>/gi;
@@ -67,6 +68,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     messagingToolSentTargets: [],
     pendingMessagingTexts: new Map(),
     pendingMessagingTargets: new Map(),
+    toolValidationLoop: createToolValidationLoopState(),
   };
 
   const assistantTexts = state.assistantTexts;
@@ -528,6 +530,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     noteCompactionRetry,
     resolveCompactionRetry,
     maybeResolveCompactionWait,
+    requestAbortDueToValidationLoop: params.onValidationLoopDetected,
   };
 
   const unsubscribe = params.session.subscribe(createEmbeddedPiSessionEventHandler(ctx));

@@ -8,6 +8,7 @@ import type {
   BlockReplyChunking,
   SubscribeEmbeddedPiSessionParams,
 } from "./pi-embedded-subscribe.types.js";
+import type { ToolValidationLoopState } from "./tool-validation-loop-detection.js";
 
 export type EmbeddedSubscribeLogger = {
   debug: (message: string) => void;
@@ -59,6 +60,9 @@ export type EmbeddedPiSubscribeState = {
   messagingToolSentTargets: MessagingToolSend[];
   pendingMessagingTexts: Map<string, string>;
   pendingMessagingTargets: Map<string, MessagingToolSend>;
+
+  /** State for detecting tool validation loops (issue #7500). */
+  toolValidationLoop: ToolValidationLoopState;
 };
 
 export type EmbeddedPiSubscribeContext = {
@@ -99,6 +103,8 @@ export type EmbeddedPiSubscribeContext = {
   noteCompactionRetry: () => void;
   resolveCompactionRetry: () => void;
   maybeResolveCompactionWait: () => void;
+  /** Callback to request turn abort due to validation loop. */
+  requestAbortDueToValidationLoop?: (reason: string) => void;
 };
 
 export type EmbeddedPiSubscribeEvent =

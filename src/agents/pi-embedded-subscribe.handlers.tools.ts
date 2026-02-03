@@ -12,6 +12,7 @@ import {
 } from "./pi-embedded-subscribe.tools.js";
 import { inferToolMetaFromArgs } from "./pi-embedded-utils.js";
 import { normalizeToolName } from "./tool-policy.js";
+import { recordToolResult } from "./tool-validation-loop-detection.js";
 
 function extendExecMeta(toolName: string, args: unknown, meta?: string): string | undefined {
   const normalized = toolName.trim().toLowerCase();
@@ -164,13 +165,29 @@ export function handleToolExecutionEnd(
   ctx.state.toolMetas.push({ toolName, meta });
   ctx.state.toolMetaById.delete(toolCallId);
   ctx.state.toolSummaryById.delete(toolCallId);
+
+  let errorMessage: string | undefined;
   if (isToolError) {
-    const errorMessage = extractToolErrorMessage(sanitizedResult);
+    errorMessage = extractToolErrorMessage(sanitizedResult);
     ctx.state.lastToolError = {
       toolName,
       meta,
       error: errorMessage,
     };
+  }
+
+  // Check for tool validation loop (issue #7500).
+  const loopCheck = recordToolResult(
+    ctx.state.toolValidationLoop,
+    toolName,
+    isToolError,
+    errorMessage,
+  );
+  if (loopCheck.shouldAbort && ctx.requestAbortDueToValidationLoop) {
+    ctx.log.warn(
+      `Tool validation loop detected: ${ctx.state.toolValidationLoop.consecutiveValidationFailures} consecutive failures`,
+    );
+    ctx.requestAbortDueToValidationLoop(loopCheck.reason ?? "Tool validation loop detected");
   }
 
   // Commit messaging tool text on success, discard on error.
