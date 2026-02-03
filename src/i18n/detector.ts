@@ -24,13 +24,8 @@ import {
  */
 export function getSystemLocale(): SupportedLocale | null {
   // Check common environment variables in priority order
-  const localeEnvVars = [
-    "LC_ALL",
-    "LC_MESSAGES",
-    "LANG",
-    "LANGUAGE",
-    "NODE_ENV", // Sometimes used to indicate locale
-  ];
+  // Standard locale environment variables per POSIX and common conventions
+  const localeEnvVars = ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"];
 
   for (const envVar of localeEnvVars) {
     const value = process.env[envVar];

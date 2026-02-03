@@ -46,7 +46,8 @@ describe("i18n Module", () => {
       expect(translator.getLocale()).toBe(LOCALE_ZH_CN);
     });
 
-    it("should fall back to default locale for unsupported locales", () => {
+    it("should allow creating translator with any locale string (validation happens at setLocale)", () => {
+      // createI18n accepts any string for flexibility, validation occurs when calling setLocale
       const translator = createI18n("unsupported-locale" as unknown as typeof LOCALE_EN);
       expect(translator.getLocale()).toBe("unsupported-locale");
     });

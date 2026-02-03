@@ -34,7 +34,8 @@ export const LOCALE_FILE_PATTERN = "locales/{{locale}}.json";
 export const NAMESPACE_SEPARATOR = ":";
 
 // Fallback string when translation is not found
-export const FALLBACK_STRING = "[missing translation]";
+// Includes {{key}} placeholder for the missing translation key
+export const FALLBACK_STRING = "[missing translation: {{key}}]";
 
 // Interpolation pattern for variable substitution
 export const INTERPOLATION_PATTERN = /\{\{([^}]+)\}\}/g;
