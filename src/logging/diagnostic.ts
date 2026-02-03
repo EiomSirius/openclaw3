@@ -18,6 +18,9 @@ type SessionRef = {
   sessionKey?: string;
 };
 
+const SESSION_STATE_IDLE_TTL_MS = 60 * 60 * 1000; // 1 hour - idle sessions
+const SESSION_STATE_STALE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours - stuck/processing sessions
+const MAX_SESSION_STATES = 10_000; // Prevent unbounded growth
 const sessionStates = new Map<string, SessionState>();
 
 const webhookStats = {
@@ -303,6 +306,32 @@ export function startDiagnosticHeartbeat() {
   }
   heartbeatInterval = setInterval(() => {
     const now = Date.now();
+
+    // Cleanup: evict stale sessions (must be before early return)
+    // Snapshot keys to avoid mutating Map during iteration
+    const keysToDelete: string[] = [];
+    for (const [key, state] of sessionStates) {
+      const age = now - state.lastActivity;
+      if (state.state === "idle" && age > SESSION_STATE_IDLE_TTL_MS) {
+        keysToDelete.push(key);
+      } else if (state.state !== "idle" && age > SESSION_STATE_STALE_TTL_MS) {
+        keysToDelete.push(key);
+      }
+    }
+    for (const key of keysToDelete) {
+      sessionStates.delete(key);
+    }
+    // Enforce hard size limit (use index-based iteration to avoid O(n²) shift())
+    if (sessionStates.size > MAX_SESSION_STATES) {
+      const sorted = Array.from(sessionStates.entries()).sort(
+        (a, b) => a[1].lastActivity - b[1].lastActivity,
+      );
+      const excess = sessionStates.size - MAX_SESSION_STATES;
+      for (let i = 0; i < excess && i < sorted.length; i++) {
+        sessionStates.delete(sorted[i][0]);
+      }
+    }
+
     const activeCount = Array.from(sessionStates.values()).filter(
       (s) => s.state === "processing",
     ).length;
