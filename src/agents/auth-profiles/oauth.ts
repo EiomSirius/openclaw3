@@ -9,7 +9,8 @@ import type { OpenClawConfig } from "../../config/config.js";
 import type { AuthProfileStore } from "./types.js";
 import { refreshQwenPortalCredentials } from "../../providers/qwen-portal-oauth.js";
 import { refreshChutesTokens } from "../chutes-oauth.js";
-import { AUTH_STORE_LOCK_OPTIONS, log } from "./constants.js";
+import { writeClaudeCliCredentials } from "../cli-credentials.js";
+import { AUTH_STORE_LOCK_OPTIONS, CLAUDE_CLI_PROFILE_ID, log } from "./constants.js";
 import { formatAuthDoctorHint } from "./doctor.js";
 import { ensureAuthStoreFile, resolveAuthStorePath } from "./paths.js";
 import { suggestOAuthProfileIdForLegacyDefault } from "./repair.js";
@@ -41,6 +42,7 @@ async function refreshOAuthTokenWithLock(params: {
   ensureAuthStoreFile(authPath);
 
   let release: (() => Promise<void>) | undefined;
+  let cliWriteBack: OAuthCredentials | undefined;
   try {
     release = await lockfile.lock(authPath, {
       ...AUTH_STORE_LOCK_OPTIONS,
@@ -93,6 +95,13 @@ async function refreshOAuthTokenWithLock(params: {
     };
     saveAuthProfileStore(store, params.agentDir);
 
+    // Defer Claude CLI write-back until after the auth store lock is released
+    // to avoid holding the lock during potentially slow filesystem/keychain operations.
+    const refreshedCred = store.profiles[params.profileId];
+    if (params.profileId === CLAUDE_CLI_PROFILE_ID && refreshedCred?.provider === "anthropic") {
+      cliWriteBack = result.newCredentials;
+    }
+
     return result;
   } finally {
     if (release) {
@@ -100,6 +109,19 @@ async function refreshOAuthTokenWithLock(params: {
         await release();
       } catch {
         // ignore unlock errors
+      }
+    }
+    // Write back Claude CLI credentials after releasing the auth store lock.
+    if (cliWriteBack) {
+      try {
+        const written = writeClaudeCliCredentials(cliWriteBack);
+        if (!written) {
+          log.warn("write-back to claude cli returned false (file missing or structure invalid)");
+        }
+      } catch (error) {
+        log.warn("failed to write back refreshed credentials to claude cli", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   }
