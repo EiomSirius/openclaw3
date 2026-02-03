@@ -1,5 +1,6 @@
 import type { OpenClawConfig } from "../config/config.js";
-import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
+import { DEFAULT_ACCOUNT_ID } from "../routing/session-key.js";
+import { normalizeAccountId } from "../utils/account-id.js";
 
 export type DiscordTokenSource = "env" | "config" | "none";
 
@@ -23,7 +24,7 @@ export function resolveDiscordToken(
   cfg?: OpenClawConfig,
   opts: { accountId?: string | null; envToken?: string | null } = {},
 ): DiscordTokenResolution {
-  const accountId = normalizeAccountId(opts.accountId);
+  const accountId = normalizeAccountId(opts.accountId) ?? DEFAULT_ACCOUNT_ID;
   const discordCfg = cfg?.channels?.discord;
   const accountCfg =
     accountId !== DEFAULT_ACCOUNT_ID
