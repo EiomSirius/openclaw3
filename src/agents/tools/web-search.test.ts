@@ -195,3 +195,11 @@ describe("WebSearchProvider - Fallback Behavior", () => {
     await expect(fallback.search(options)).rejects.toThrow("Fallback failed");
   });
 });
+
+describe("SerperProvider error messages", () => {
+  it("should mention config option when API key is missing", () => {
+    expect(() => new SerperProvider({})).toThrow(
+      "SerperProvider requires an API key. Set tools.web.search.serper.apiKey in config, or SERPER_API_KEY in the Gateway environment.",
+    );
+  });
+});

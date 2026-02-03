@@ -323,6 +323,7 @@ export function createWebSearchTool(options?: {
   // Create providers
   let primaryProvider: WebSearchProvider | undefined;
   let fallbackProvider: WebSearchProvider | undefined;
+  let fallbackInitError: Error | undefined;
 
   try {
     primaryProvider = createProvider(providerType, providerConfig);
@@ -370,8 +371,9 @@ export function createWebSearchTool(options?: {
   if (fallbackType && primaryProvider) {
     try {
       fallbackProvider = createProvider(fallbackType, providerConfig);
-    } catch {
-      // Fallback creation failed - continue without fallback
+    } catch (e) {
+      // Fallback creation failed - record error for surfacing in tool description/payload
+      fallbackInitError = e instanceof Error ? e : new Error(String(e));
       fallbackProvider = undefined;
     }
   }
@@ -383,7 +385,9 @@ export function createWebSearchTool(options?: {
         ? "Search the web using Serper (Google Search API). Returns titles, URLs, and snippets for fast research."
         : fallbackProvider
           ? `Search the web using ${providerType} with ${fallbackType} fallback. Supports region-specific and localized search. Returns titles, URLs, and snippets for fast research.`
-          : "Search the web using Brave Search API. Supports region-specific and localized search via country and language parameters. Returns titles, URLs, and snippets for fast research.";
+          : fallbackInitError
+            ? `Search the web using ${providerType}. (Warning: Fallback provider ${fallbackType} failed to initialize: ${fallbackInitError.message}) Supports region-specific and localized search. Returns titles, URLs, and snippets for fast research.`
+            : "Search the web using Brave Search API. Supports region-specific and localized search via country and language parameters. Returns titles, URLs, and snippets for fast research.";
 
   return {
     label: "Web Search",
@@ -437,6 +441,13 @@ export function createWebSearchTool(options?: {
           ui_lang,
           freshness,
         });
+        // Include fallback initialization warning if present
+        if (fallbackInitError && typeof result === "object" && result !== null) {
+          return jsonResult({
+            ...result,
+            fallbackWarning: `Fallback provider ${fallbackType} failed to initialize: ${fallbackInitError.message}`,
+          });
+        }
         return jsonResult(result);
       } catch (error) {
         return jsonResult({

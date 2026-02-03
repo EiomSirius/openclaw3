@@ -316,7 +316,7 @@ export class SerperProvider implements WebSearchProvider {
     const apiKey = this.resolveApiKey(config);
     if (!apiKey) {
       throw new Error(
-        "SerperProvider requires an API key. Set SERPER_API_KEY environment variable.",
+        "SerperProvider requires an API key. Set tools.web.search.serper.apiKey in config, or SERPER_API_KEY in the Gateway environment.",
       );
     }
     this.apiKey = apiKey;
