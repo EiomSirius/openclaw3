@@ -107,7 +107,7 @@ openclaw browser extension path
 
 ## 远程浏览器控制（节点主机代理）
 
-如果 Gateway网关与浏览器运行在不同的机器上，请在安装了 Chrome/Brave/Edge/Chromium 的机器上运行**节点主机**。Gateway网关会将浏览器操作代理到该节点（无需单独的浏览器控制服务器）。
+如果 Gateway网关与浏览器运行在不同的机器上，请在安装了 Chrome/Brave/Edge/Chromium（或 macOS 上的 ChatGPT Atlas）的机器上运行**节点主机**。Gateway网关会将浏览器操作代理到该节点（无需单独的浏览器控制服务器）。
 
 使用 `gateway.nodes.browser.mode` 控制自动路由，使用 `gateway.nodes.browser.node` 在多个节点连接时固定到特定节点。
 
