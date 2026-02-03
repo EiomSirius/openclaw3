@@ -180,7 +180,15 @@ export async function promptDefaultModel(
   }
 
   if (hasPreferredProvider && preferredProvider) {
-    models = models.filter((entry) => entry.provider === preferredProvider);
+    models = models.filter((entry) => {
+      if (preferredProvider === "volcengine") {
+        return entry.provider === "volcengine" || entry.provider === "volcengine-plan";
+      }
+      if (preferredProvider === "byteplus") {
+        return entry.provider === "byteplus" || entry.provider === "byteplus-plan";
+      }
+      return entry.provider === preferredProvider;
+    });
   }
 
   const authStore = ensureAuthProfileStore(params.agentDir, {

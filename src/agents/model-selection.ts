@@ -38,6 +38,10 @@ export function normalizeProviderId(provider: string): string {
   if (normalized === "kimi-code") {
     return "kimi-coding";
   }
+  // 向后兼容：将旧的 bytedance/doubao provider 名称映射到 volcengine
+  if (normalized === "bytedance" || normalized === "doubao") {
+    return "volcengine";
+  }
   return normalized;
 }
 
