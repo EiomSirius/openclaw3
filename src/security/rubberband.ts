@@ -353,10 +353,10 @@ const PATTERNS: Record<string, PatternRule> = {
   },
   package_manager_abuse: {
     patterns: [
-      /pip\s+install\s+git\+/i,
-      /pip\s+install\s+https?:/i,
-      /npm\s+install\s+\S+/i,
-      /yarn\s+add\s+\S+/i,
+      /\bpip\s+install\s+git\+/i,
+      /\bpip\s+install\s+https?:/i,
+      /\bnpm\s+install\s+\S+/i,
+      /\byarn\s+add\s+\S+/i,
     ],
     score: 40,
     category: "code_execution",
