@@ -260,7 +260,7 @@ For long-running background tasks, append a wake trigger to your prompt so OpenC
 ... your task here.
 
 When completely finished, run this command to notify me:
-openclaw gateway wake --text "Done: [brief summary of what was built]" --mode now
+openclaw system event --text "Done: [brief summary of what was built]" --mode now
 ```
 
 **Example:**
@@ -268,10 +268,39 @@ openclaw gateway wake --text "Done: [brief summary of what was built]" --mode no
 ```bash
 bash pty:true workdir:~/project background:true command:"codex --yolo exec 'Build a REST API for todos.
 
-When completely finished, run: openclaw gateway wake --text \"Done: Built todos REST API with CRUD endpoints\" --mode now'"
+When completely finished, run: openclaw system event --text \"Done: Built todos REST API with CRUD endpoints\" --mode now'"
 ```
 
-This triggers an immediate wake event — Skippy gets pinged in seconds, not 10 minutes.
+This triggers an immediate wake event — you get pinged in seconds, not 10 minutes.
+
+---
+
+## 🖥️ tmux Monitoring (Recommended for Long Tasks)
+
+For monitored, long-running tasks, launch coding agents inside **named tmux sessions** instead of bare background exec. This gives both you and your user real-time visibility into what the agent is doing.
+
+**Why tmux over bare exec:**
+- User can `tmux attach` and watch the agent work live
+- Full scrollback persists after the agent finishes — reviewable at leisure
+- You can monitor via the **tmux skill** (pane scraping) without interrupting
+- Session stays open for inspection even after the agent exits
+
+**The pattern:**
+
+1. Create a named tmux session (convention: `agent-<task-slug>`)
+2. Launch the coding agent inside it
+3. Always include the wake command in the prompt for completion notification
+4. Tell the user the session name so they can attach
+
+See the **tmux skill** for session management details (creating sessions, sending keys, capturing output, cleanup).
+
+**Completion detection:**
+- **Primary:** The wake command (`openclaw system event --text "Done: ..." --mode now`) fires when the agent finishes
+- **Safety net:** If you use heartbeats, check active tmux sessions periodically — look for a returned shell prompt (agent exited) or signs the agent is stuck
+
+**When to use tmux vs bare exec:**
+- **tmux:** Monitored tasks, anything the user might want to watch, long-running work
+- **bare exec:** Quick throwaway one-shots where visibility doesn't matter
 
 ---
 
