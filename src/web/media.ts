@@ -3,7 +3,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
-import { type MediaKind, MAX_STICKER_BYTES, maxBytesForKind, mediaKindFromMime } from "../media/constants.js";
+import {
+  type MediaKind,
+  MAX_STICKER_BYTES,
+  maxBytesForKind,
+  mediaKindFromMime,
+} from "../media/constants.js";
 import { fetchRemoteMedia } from "../media/fetch.js";
 import {
   convertHeicToJpeg,

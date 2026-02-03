@@ -246,9 +246,7 @@ export async function monitorWebInbox(options: {
         }
         const senderName = msg.pushName ?? senderE164 ?? "someone";
         const targetId = reaction.targetMessageId ?? "unknown";
-        logVerbose(
-          `WhatsApp reaction: ${reaction.emoji} by ${senderName} on msg ${targetId}`,
-        );
+        logVerbose(`WhatsApp reaction: ${reaction.emoji} by ${senderName} on msg ${targetId}`);
       }
 
       const location = extractLocationData(msg.message ?? undefined);

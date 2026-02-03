@@ -1,7 +1,7 @@
 import type { AnyMessageContent, WAPresence } from "@whiskeysockets/baileys";
 import type { ActiveWebSendOptions } from "../active-listener.js";
-import { MAX_STICKER_BYTES } from "../../media/constants.js";
 import { recordChannelActivity } from "../../infra/channel-activity.js";
+import { MAX_STICKER_BYTES } from "../../media/constants.js";
 import { toWhatsappJid } from "../../utils.js";
 
 export function createWebSendApi(params: {
