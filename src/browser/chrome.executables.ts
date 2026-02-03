@@ -615,6 +615,32 @@ export function findChromeExecutableWindows(): BrowserExecutable | null {
   return findFirstExecutable(candidates);
 }
 
+export function findAtlasExecutableMac(): BrowserExecutable | null {
+  const candidates: Array<BrowserExecutable> = [
+    {
+      kind: "chromium",
+      path: "/Applications/ChatGPT Atlas.app/Contents/MacOS/ChatGPT Atlas",
+    },
+    {
+      kind: "chromium",
+      path: path.join(
+        os.homedir(),
+        "Applications/ChatGPT Atlas.app/Contents/MacOS/ChatGPT Atlas",
+      ),
+    },
+  ];
+  return findFirstExecutable(candidates);
+}
+
+export function resolveAtlasExecutableForPlatform(
+  platform: NodeJS.Platform,
+): BrowserExecutable | null {
+  if (platform === "darwin") {
+    return findAtlasExecutableMac();
+  }
+  return null;
+}
+
 export function resolveBrowserExecutableForPlatform(
   resolved: ResolvedBrowserConfig,
   platform: NodeJS.Platform,
