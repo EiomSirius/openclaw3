@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../../config/config.js";
-import { readResponseText, withTimeout } from "./web-shared.js";
+import { readResponseText, resolveSiteName, withTimeout } from "./web-shared.js";
 
 // ============================================================================
 // Types
@@ -126,7 +126,7 @@ export class BraveProvider implements WebSearchProvider {
       url: entry.url ?? "",
       description: entry.description ?? "",
       published: entry.age || undefined,
-      siteName: this.resolveSiteName(entry.url),
+      siteName: resolveSiteName(entry.url),
     }));
 
     return {
@@ -136,15 +136,6 @@ export class BraveProvider implements WebSearchProvider {
       tookMs: Date.now() - start,
       results: mapped,
     };
-  }
-
-  private resolveSiteName(url: string | undefined): string | undefined {
-    if (!url) return undefined;
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return undefined;
-    }
   }
 }
 
@@ -365,7 +356,7 @@ export class SerperProvider implements WebSearchProvider {
       url: item.link,
       description: item.snippet,
       published: item.date || undefined,
-      siteName: this.resolveSiteName(item.link),
+      siteName: resolveSiteName(item.link),
     }));
 
     const start = Date.now();
@@ -382,15 +373,6 @@ export class SerperProvider implements WebSearchProvider {
           }
         : undefined,
     };
-  }
-
-  private resolveSiteName(url: string | undefined): string | undefined {
-    if (!url) return undefined;
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return undefined;
-    }
   }
 }
 

@@ -245,25 +245,27 @@ async function runWebSearchWithFallback(
   fallbackProvider: WebSearchProvider | undefined,
   options: WebSearchOptions,
 ): Promise<Record<string, unknown>> {
-  // Build cache key including both providers
-  const cacheKey = normalizeCacheKey(
-    fallbackProvider
-      ? `${provider.type}:${fallbackProvider.type}:${options.query}:${options.count}:${options.country || "default"}:${options.search_lang || "default"}:${options.ui_lang || "default"}:${options.freshness || "default"}`
-      : `${provider.type}:${options.query}:${options.count}:${options.country || "default"}:${options.search_lang || "default"}:${options.ui_lang || "default"}:${options.freshness || "default"}`,
-  );
+  // Build cache key (fallback provider info will be added later if actually used)
+  const baseCacheKey = `${provider.type}:${options.query}:${options.count}:${options.country || "default"}:${options.search_lang || "default"}:${options.ui_lang || "default"}:${options.freshness || "default"}`;
+  const primaryCacheKey = normalizeCacheKey(baseCacheKey);
 
-  const cached = readCache(SEARCH_CACHE, cacheKey);
+  const cached = readCache(SEARCH_CACHE, primaryCacheKey);
   if (cached) {
     return { ...cached.value, cached: true };
   }
 
   const start = Date.now();
 
-  // Try primary provider
+  // Calculate timeouts: 70% for primary, 30% for fallback
+  const primaryTimeoutSeconds = Math.max(1, Math.floor(options.timeoutSeconds * 0.7));
+  const fallbackTimeoutSeconds = Math.max(1, Math.floor(options.timeoutSeconds * 0.3));
+
+  // Try primary provider with reduced timeout
   try {
-    const result = await provider.search(options);
+    const primaryOptions = { ...options, timeoutSeconds: primaryTimeoutSeconds };
+    const result = await provider.search(primaryOptions);
     const payload = { ...result, tookMs: Date.now() - start };
-    writeCache(SEARCH_CACHE, cacheKey, payload, options.cacheTtlMs);
+    writeCache(SEARCH_CACHE, primaryCacheKey, payload, options.cacheTtlMs);
     return wrapSearchResult(payload);
   } catch (primaryError) {
     // If no fallback, re-throw
@@ -271,16 +273,28 @@ async function runWebSearchWithFallback(
       throw primaryError;
     }
 
-    // Try fallback provider
+    // Build fallback cache key including fallback provider info
+    const fallbackCacheKey = normalizeCacheKey(
+      `${provider.type}:${fallbackProvider.type}:${baseCacheKey}`,
+    );
+
+    // Check cache again with fallback key
+    const fallbackCached = readCache(SEARCH_CACHE, fallbackCacheKey);
+    if (fallbackCached) {
+      return { ...fallbackCached.value, cached: true };
+    }
+
+    // Try fallback provider with remaining timeout
     try {
-      const fallbackResult = await fallbackProvider.search(options);
+      const fallbackOptions = { ...options, timeoutSeconds: fallbackTimeoutSeconds };
+      const fallbackResult = await fallbackProvider.search(fallbackOptions);
       const payload = {
         ...fallbackResult,
         provider: fallbackProvider.type,
         fallbackFrom: provider.type,
         tookMs: Date.now() - start,
       };
-      writeCache(SEARCH_CACHE, cacheKey, payload, options.cacheTtlMs);
+      writeCache(SEARCH_CACHE, fallbackCacheKey, payload, options.cacheTtlMs);
       return wrapSearchResult(payload);
     } catch (fallbackError) {
       // Combine both errors
