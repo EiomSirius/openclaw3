@@ -3,6 +3,7 @@ import type { ChatLog } from "./components/chat-log.js";
 import type { AgentEvent, ChatEvent, TuiStateAccess } from "./tui-types.js";
 import { asString, extractTextFromMessage, isCommandMessage } from "./tui-formatters.js";
 import { TuiStreamAssembler } from "./tui-stream-assembler.js";
+import { resolveToolDisplay } from "../agents/tool-display.js";
 
 type EventHandlerContext = {
   chatLog: ChatLog;
@@ -141,6 +142,11 @@ export function createEventHandlers(context: EventHandlerContext) {
     tui.requestRender();
   };
 
+  // Track tool status display time for minimum visibility
+  let lastToolStatusAt: number | null = null;
+  let toolStatusResetTimer: ReturnType<typeof setTimeout> | null = null;
+  const MIN_TOOL_STATUS_MS = 1000;
+
   const handleAgentEvent = (payload: unknown) => {
     if (!payload || typeof payload !== "object") {
       return;
@@ -163,6 +169,15 @@ export function createEventHandlers(context: EventHandlerContext) {
       }
       if (phase === "start") {
         chatLog.startTool(toolCallId, toolName, data.args);
+        // Show tool with emoji in status bar during execution
+        const display = resolveToolDisplay({ name: toolName, args: data.args });
+        // Clear any pending reset timer
+        if (toolStatusResetTimer) {
+          clearTimeout(toolStatusResetTimer);
+          toolStatusResetTimer = null;
+        }
+        setActivityStatus(`${display.emoji} ${display.label}…`);
+        lastToolStatusAt = Date.now();
       } else if (phase === "update") {
         chatLog.updateToolResult(toolCallId, data.partialResult, {
           partial: true,
@@ -171,6 +186,18 @@ export function createEventHandlers(context: EventHandlerContext) {
         chatLog.updateToolResult(toolCallId, data.result, {
           isError: Boolean(data.isError),
         });
+        // Reset status after tool completes, but ensure status visible for minimum time
+        const elapsed = lastToolStatusAt ? Date.now() - lastToolStatusAt : MIN_TOOL_STATUS_MS;
+        const remaining = MIN_TOOL_STATUS_MS - elapsed;
+        if (remaining > 0) {
+          toolStatusResetTimer = setTimeout(() => {
+            setActivityStatus("running");
+            tui.requestRender();
+            toolStatusResetTimer = null;
+          }, remaining);
+        } else {
+          setActivityStatus("running");
+        }
       }
       tui.requestRender();
       return;
