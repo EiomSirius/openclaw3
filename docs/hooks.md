@@ -233,6 +233,23 @@ Triggered when agent commands are issued:
 ### Agent Events
 
 - **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
+- **`agent:turn_start`**: When the agent begins processing an inbound message
+- **`agent:turn_end`**: When the agent finishes processing and has sent a response
+
+#### Turn Event Context
+
+The `agent:turn_start` and `agent:turn_end` events include the following context:
+
+```typescript
+{
+  source: string;          // Channel (e.g., "telegram", "whatsapp")
+  senderId?: string;       // Sender's ID
+  senderName?: string;     // Sender's display name
+  chatType?: string;       // Chat type (e.g., "private", "group")
+  groupSubject?: string;   // Group name if applicable
+  messagePreview?: string; // First 100 chars of message
+  success?: boolean;       // (turn_end only) Whether processing succeeded
+}
 
 ### Gateway Events
 
@@ -253,8 +270,8 @@ Planned event types:
 - **`session:start`**: When a new session begins
 - **`session:end`**: When a session ends
 - **`agent:error`**: When an agent encounters an error
-- **`message:sent`**: When a message is sent
-- **`message:received`**: When a message is received
+
+> **Note:** The previously planned `message:sent` and `message:received` events are superseded by the more precise `agent:turn_start` and `agent:turn_end` events above.
 
 ## Creating Custom Hooks
 
