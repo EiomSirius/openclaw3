@@ -163,7 +163,11 @@ describe("buildEmbeddedRunPayloads", () => {
           },
         ],
       } as AssistantMessage,
-      lastToolError: { toolName: "exec", error: "Command exited with code 1" },
+      lastToolError: {
+        toolName: "exec",
+        error: "Command exited with code 1",
+        occurredAtMs: Date.UTC(2026, 1, 2, 10, 54, 35),
+      },
       sessionKey: "session:telegram",
       inlineToolResultsAllowed: false,
       verboseLevel: "off",
@@ -175,6 +179,7 @@ describe("buildEmbeddedRunPayloads", () => {
     expect(payloads[0]?.isError).toBe(true);
     expect(payloads[0]?.text).toContain("Exec");
     expect(payloads[0]?.text).toContain("code 1");
+    expect(payloads[0]?.text).toContain("[2026-02-02 10:54:35 UTC]");
   });
 
   it("suppresses recoverable tool errors containing 'required'", () => {

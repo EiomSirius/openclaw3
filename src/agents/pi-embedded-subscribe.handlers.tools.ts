@@ -170,6 +170,7 @@ export function handleToolExecutionEnd(
       toolName,
       meta,
       error: errorMessage,
+      occurredAtMs: Date.now(),
     };
   }
 

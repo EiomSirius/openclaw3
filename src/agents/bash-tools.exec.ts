@@ -388,9 +388,21 @@ function maybeNotifyOnExit(session: ProcessSession, status: "completed" | "faile
   const output = normalizeNotifyOutput(
     tail(session.tail || session.aggregated || "", DEFAULT_NOTIFY_TAIL_CHARS),
   );
+  const formatUtc = (ms: number) => {
+    const iso = new Date(ms).toISOString();
+    const [date, timeWithMs] = iso.split("T");
+    const time = (timeWithMs ?? "").split(".")[0];
+    if (!date || !time) {
+      return iso;
+    }
+    return `${date} ${time} UTC`;
+  };
+  const occurredAtMs = Date.now();
+  const ts = `[${formatUtc(occurredAtMs)}]`;
+
   const summary = output
-    ? `Exec ${status} (${session.id.slice(0, 8)}, ${exitLabel}) :: ${output}`
-    : `Exec ${status} (${session.id.slice(0, 8)}, ${exitLabel})`;
+    ? `Exec ${status} ${ts} (${session.id.slice(0, 8)}, ${exitLabel}) :: ${output}`
+    : `Exec ${status} ${ts} (${session.id.slice(0, 8)}, ${exitLabel})`;
   enqueueSystemEvent(summary, { sessionKey });
   requestHeartbeatNow({ reason: `exec:${session.id}:exit` });
 }

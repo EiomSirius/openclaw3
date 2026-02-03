@@ -24,7 +24,7 @@ export function buildEmbeddedRunPayloads(params: {
   assistantTexts: string[];
   toolMetas: ToolMetaEntry[];
   lastAssistant: AssistantMessage | undefined;
-  lastToolError?: { toolName: string; meta?: string; error?: string };
+  lastToolError?: { toolName: string; meta?: string; error?: string; occurredAtMs?: number };
   config?: OpenClawConfig;
   sessionKey: string;
   verboseLevel?: VerboseLevel;
@@ -224,8 +224,24 @@ export function buildEmbeddedRunPayloads(params: {
         { markdown: useMarkdown },
       );
       const errorSuffix = params.lastToolError.error ? `: ${params.lastToolError.error}` : "";
+
+      const formatUtc = (ms: number) => {
+        const iso = new Date(ms).toISOString();
+        const [date, timeWithMs] = iso.split("T");
+        const time = (timeWithMs ?? "").split(".")[0];
+        if (!date || !time) {
+          return iso;
+        }
+        return `${date} ${time} UTC`;
+      };
+      const timestampPrefix =
+        typeof params.lastToolError.occurredAtMs === "number" &&
+        Number.isFinite(params.lastToolError.occurredAtMs)
+          ? `[${formatUtc(params.lastToolError.occurredAtMs)}] `
+          : "";
+
       replyItems.push({
-        text: `⚠️ ${toolSummary} failed${errorSuffix}`,
+        text: `⚠️ ${timestampPrefix}${toolSummary} failed${errorSuffix}`,
         isError: true,
       });
     }

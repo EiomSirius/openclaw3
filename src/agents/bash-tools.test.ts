@@ -296,7 +296,12 @@ describe("exec notifyOnExit", () => {
 
     expect(finished).toBeTruthy();
     const events = peekSystemEvents("agent:main:main");
-    expect(events.some((event) => event.includes(sessionId.slice(0, 8)))).toBe(true);
+    const bySession = events.filter((event) => event.includes(sessionId.slice(0, 8)));
+    expect(bySession.length).toBeGreaterThan(0);
+    // Includes an explicit UTC timestamp in the payload so delayed delivery is still understandable.
+    expect(
+      bySession.some((event) => /\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC\]/.test(event)),
+    ).toBe(true);
   });
 });
 
