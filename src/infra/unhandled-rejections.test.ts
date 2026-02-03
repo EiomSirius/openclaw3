@@ -86,6 +86,12 @@ describe("isTransientNetworkError", () => {
     expect(isTransientNetworkError(error)).toBe(true);
   });
 
+  it("returns true for fetch failed with unknown cause", () => {
+    const cause = Object.assign(new Error("unknown error"), { code: "UNKNOWN_CODE" });
+    const error = Object.assign(new TypeError("fetch failed"), { cause });
+    expect(isTransientNetworkError(error)).toBe(true);
+  });
+
   it("returns true for nested cause chain with network error", () => {
     const innerCause = Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
     const outerCause = Object.assign(new Error("wrapper"), { cause: innerCause });
