@@ -18,7 +18,19 @@ export type UiSettings = {
 export function loadSettings(): UiSettings {
   const defaultUrl = (() => {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    return `${proto}://${location.host}`;
+    
+    // Extract base path from current URL
+    const basePath = (() => {
+      const pathname = location.pathname || "/";
+      // Remove trailing filename if present (e.g., index.html)
+      const withoutFile = pathname.replace(/\/[^/]*\.(html|js)$/, "");
+      // Remove trailing slash for cleaner URL
+      const trimmed = withoutFile.replace(/\/$/, "");
+      return trimmed || "/";
+    })();
+    
+    // Construct WebSocket URL with base path
+    return `${proto}://${location.host}${basePath === "/" ? "" : basePath}`;
   })();
 
   const defaults: UiSettings = {
