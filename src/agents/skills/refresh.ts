@@ -26,9 +26,19 @@ const watchers = new Map<string, SkillsWatchState>();
 let globalVersion = 0;
 
 export const DEFAULT_SKILLS_WATCH_IGNORED: RegExp[] = [
+  // Existing
   /(^|[\\/])\.git([\\/]|$)/,
   /(^|[\\/])node_modules([\\/]|$)/,
   /(^|[\\/])dist([\\/]|$)/,
+
+  // Python virtual environments & caches
+  /(^|[\\/])\.venv([\\/]|$)/,
+  /(^|[\\/])venv([\\/]|$)/,
+  /(^|[\\/])__pycache__([\\/]|$)/,
+  /(^|[\\/])\.pytest_cache([\\/]|$)/,
+
+  // Other common caches
+  /(^|[\\/])\.cache([\\/]|$)/,
 ];
 
 function bumpVersion(current: number): number {
