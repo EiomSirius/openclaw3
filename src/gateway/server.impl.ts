@@ -550,6 +550,8 @@ export async function startGatewayServer(
     logHooks,
     logChannels,
     logBrowser,
+    addChatRun,
+    broadcast,
   }));
 
   const { applyHotReload, requestGatewayRestart } = createGatewayReloadHandlers({
