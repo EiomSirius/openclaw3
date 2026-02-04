@@ -36,6 +36,7 @@ function getPageScript(): string {
     const scriptPath = join(__dirname, "page-script-enhanced.js");
     pageScriptContent = readFileSync(scriptPath, "utf-8");
   }
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return pageScriptContent!;
 }
 
@@ -96,6 +97,7 @@ async function ensureScriptInjected(page: Page): Promise<void> {
   if (pagesWithScript.has(page)) {
     // Script already injected, just verify it's available
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       const isAvailable = (await page.evaluate(
         "typeof OpenClawEnhancedDetection !== 'undefined'",
       )) as boolean;
@@ -119,6 +121,7 @@ async function ensureScriptInjected(page: Page): Promise<void> {
     // Also evaluate immediately to make it available now
     await page.evaluate(script);
     // Verify it's available
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const isAvailable = (await page.evaluate(
       "typeof OpenClawEnhancedDetection !== 'undefined'",
     )) as boolean;
@@ -134,6 +137,7 @@ async function ensureScriptInjected(page: Page): Promise<void> {
   // If addInitScript fails, try direct evaluation
   try {
     await page.evaluate(script);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const isAvailable = (await page.evaluate(
       "typeof OpenClawEnhancedDetection !== 'undefined'",
     )) as boolean;
@@ -245,6 +249,7 @@ export async function getVisualViewportViaScript(opts: {
   ensurePageState(page);
   await ensureScriptInjected(page);
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const result = (await page.evaluate(
     "OpenClawEnhancedDetection.getVisualViewport();",
   )) as Record<string, number>;
@@ -275,6 +280,7 @@ export async function getVisibleTextViaScript(opts: {
   ensurePageState(page);
   await ensureScriptInjected(page);
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const result = (await page.evaluate(
     "OpenClawEnhancedDetection.getVisibleText();",
   )) as string;
@@ -293,6 +299,7 @@ export async function getFocusedElementIdViaScript(opts: {
   ensurePageState(page);
   await ensureScriptInjected(page);
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const result = (await page.evaluate(
     "OpenClawEnhancedDetection.getFocusedElementId();",
   )) as string | null;
