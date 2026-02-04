@@ -71,6 +71,7 @@ describe("CronService", () => {
     expect(updated?.enabled).toBe(false);
     expect(enqueueSystemEvent).toHaveBeenCalledWith("hello", {
       agentId: undefined,
+      eventType: "cron",
     });
     expect(requestHeartbeatNow).toHaveBeenCalled();
 
@@ -112,6 +113,7 @@ describe("CronService", () => {
     expect(jobs.find((j) => j.id === job.id)).toBeUndefined();
     expect(enqueueSystemEvent).toHaveBeenCalledWith("hello", {
       agentId: undefined,
+      eventType: "cron",
     });
     expect(requestHeartbeatNow).toHaveBeenCalled();
 
@@ -172,6 +174,7 @@ describe("CronService", () => {
     expect(requestHeartbeatNow).not.toHaveBeenCalled();
     expect(enqueueSystemEvent).toHaveBeenCalledWith("hello", {
       agentId: undefined,
+      eventType: "cron",
     });
     expect(job.state.runningAtMs).toBeTypeOf("number");
 
@@ -221,6 +224,7 @@ describe("CronService", () => {
     expect(runIsolatedAgentJob).toHaveBeenCalledTimes(1);
     expect(enqueueSystemEvent).toHaveBeenCalledWith("Cron: done", {
       agentId: undefined,
+      eventType: "cron",
     });
     expect(requestHeartbeatNow).toHaveBeenCalled();
     cron.stop();
@@ -364,6 +368,7 @@ describe("CronService", () => {
 
     expect(enqueueSystemEvent).toHaveBeenCalledWith("Cron (error): last output", {
       agentId: undefined,
+      eventType: "cron",
     });
     expect(requestHeartbeatNow).toHaveBeenCalled();
     cron.stop();
