@@ -33,6 +33,7 @@ openclaw onboard --install-daemon
 - **Node >=22**
 - macOS, Linux, or Windows via WSL2
 - `pnpm` only if you build from source
+- **Linux**: `build-essential` for native module compilation (install with `sudo apt install build-essential` on Debian/Ubuntu)
 
 ## Choose your install path
 
