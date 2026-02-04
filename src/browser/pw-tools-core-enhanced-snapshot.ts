@@ -10,21 +10,17 @@
  * - Multiple detection heuristics (better coverage)
  */
 
+import type { Page, Locator } from "playwright-core";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Page, Locator } from "playwright-core";
 import {
   buildRoleSnapshotFromAriaSnapshot,
   getRoleSnapshotStats,
   type RoleRefMap,
   type RoleSnapshotOptions,
 } from "./pw-role-snapshot.js";
-import {
-  ensurePageState,
-  getPageForTargetId,
-  storeRoleRefsForTarget,
-} from "./pw-session.js";
+import { ensurePageState, getPageForTargetId, storeRoleRefsForTarget } from "./pw-session.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -171,18 +167,14 @@ export async function getInteractiveRegionsViaScript(opts: {
 
   // Evaluate script within locator context if provided, otherwise use document
   const result = opts.locator
-    ? ((await opts.locator.evaluate(
-        (el: Element) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return (window as any).OpenClawEnhancedDetection.getInteractiveRects(el);
-        },
-      )) as Record<string, unknown>)
-    : ((await page.evaluate(
-        () => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return (window as any).OpenClawEnhancedDetection.getInteractiveRects(document);
-        },
-      )) as Record<string, unknown>);
+    ? ((await opts.locator.evaluate((el: Element) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (window as any).OpenClawEnhancedDetection.getInteractiveRects(el);
+      })) as Record<string, unknown>)
+    : ((await page.evaluate(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (window as any).OpenClawEnhancedDetection.getInteractiveRects(document);
+      })) as Record<string, unknown>);
 
   const regions: Record<string, InteractiveRegion> = {};
   for (const [key, value] of Object.entries(result)) {
@@ -250,9 +242,10 @@ export async function getVisualViewportViaScript(opts: {
   await ensureScriptInjected(page);
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const result = (await page.evaluate(
-    "OpenClawEnhancedDetection.getVisualViewport();",
-  )) as Record<string, number>;
+  const result = (await page.evaluate("OpenClawEnhancedDetection.getVisualViewport();")) as Record<
+    string,
+    number
+  >;
 
   return {
     height: result.height ?? 0,
@@ -281,9 +274,7 @@ export async function getVisibleTextViaScript(opts: {
   await ensureScriptInjected(page);
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const result = (await page.evaluate(
-    "OpenClawEnhancedDetection.getVisibleText();",
-  )) as string;
+  const result = (await page.evaluate("OpenClawEnhancedDetection.getVisibleText();")) as string;
 
   return String(result ?? "");
 }
@@ -300,9 +291,9 @@ export async function getFocusedElementIdViaScript(opts: {
   await ensureScriptInjected(page);
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-  const result = (await page.evaluate(
-    "OpenClawEnhancedDetection.getFocusedElementId();",
-  )) as string | null;
+  const result = (await page.evaluate("OpenClawEnhancedDetection.getFocusedElementId();")) as
+    | string
+    | null;
 
   return result;
 }
@@ -535,9 +526,7 @@ export async function snapshotHybridViaPlaywright(opts: {
 
       const roleDisplay = role || "element";
       const nameDisplay = name ? ` "${name}"` : "";
-      mergedLines.push(
-        `- ${roleDisplay}${nameDisplay} [ref=${ref}] [enhanced]`,
-      );
+      mergedLines.push(`- ${roleDisplay}${nameDisplay} [ref=${ref}] [enhanced]`);
     }
   }
 
@@ -560,4 +549,3 @@ export async function snapshotHybridViaPlaywright(opts: {
     enhancedRegions,
   };
 }
-

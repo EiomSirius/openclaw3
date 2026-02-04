@@ -19,20 +19,22 @@ Use the `snapshotFormat` parameter:
 
 ```typescript
 // Enhanced detection only
-browser({ action: "snapshot", snapshotFormat: "enhanced" })
+browser({ action: "snapshot", snapshotFormat: "enhanced" });
 
 // Hybrid: Playwright + Enhanced (recommended)
-browser({ action: "snapshot", snapshotFormat: "hybrid" })
+browser({ action: "snapshot", snapshotFormat: "hybrid" });
 ```
 
 ### Via API
 
 **Enhanced Snapshot**:
+
 ```
 GET /snapshot-enhanced?targetId=<id>&interactive=true
 ```
 
 **Hybrid Snapshot** (combines Playwright + Enhanced):
+
 ```
 GET /snapshot-hybrid?targetId=<id>&interactive=true
 ```
@@ -73,18 +75,20 @@ GET /snapshot-hybrid?targetId=<id>&interactive=true
 ## When to Use
 
 **Use Enhanced** when:
+
 - Standard Playwright snapshot misses elements
 - Working with custom UI components
 - Need bounding boxes upfront for labeling
 - Better visibility checking is important
 
 **Use Hybrid** when:
+
 - Want best of both worlds
 - Need structured Playwright data + custom element detection
 - Working with diverse websites
 
 **Use Standard** (ai/aria) when:
+
 - Standard detection is sufficient
 - Don't need custom element detection
 - Performance is critical (standard is slightly faster)
-

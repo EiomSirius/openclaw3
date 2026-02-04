@@ -416,9 +416,7 @@ export function registerBrowserAgentSnapshotRoutes(
         snapshot: snap.snapshot,
         refs: snap.refs,
         stats: snap.stats,
-        enhancedRegionsCount: snap.enhancedRegions
-          ? Object.keys(snap.enhancedRegions).length
-          : 0,
+        enhancedRegionsCount: snap.enhancedRegions ? Object.keys(snap.enhancedRegions).length : 0,
       });
     } catch (err) {
       handleRouteError(ctx, res, err);
