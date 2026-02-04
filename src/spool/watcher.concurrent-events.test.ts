@@ -17,7 +17,8 @@ vi.mock("./dispatcher.js", async (importOriginal) => {
   return {
     ...actual,
     dispatchSpoolEventFile: vi.fn().mockImplementation(async (params) => {
-      const eventId = params.filePath.split("/").pop()?.replace(".json", "") ?? "unknown";
+      // Use path.basename for cross-platform compatibility (Windows uses backslashes)
+      const eventId = path.basename(params.filePath).replace(".json", "");
       dispatchOrder.push(eventId);
 
       // Simulate processing time
@@ -229,8 +230,9 @@ describe("spool watcher - handles concurrent events", () => {
       // Initial state
       const state = watcher.getState();
       expect(state.running).toBe(true);
-      expect(state.eventsDir).toContain("spool/events");
-      expect(state.deadLetterDir).toContain("spool/dead-letter");
+      // Use path.join for cross-platform path comparison
+      expect(state.eventsDir).toContain(path.join("spool", "events"));
+      expect(state.deadLetterDir).toContain(path.join("spool", "dead-letter"));
 
       await watcher.stop();
 
@@ -253,7 +255,14 @@ describe("spool watcher - handles concurrent events", () => {
       });
 
       await watcher.start();
+
+      // Wait for watcher to fully initialize
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
       await watcher.stop();
+
+      // Wait for watcher to fully stop (Windows needs more time)
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Clear any calls from startup
       vi.mocked(dispatchSpoolEventFile).mockClear();
