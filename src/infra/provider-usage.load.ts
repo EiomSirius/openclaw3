@@ -11,6 +11,7 @@ import {
   fetchCodexUsage,
   fetchCopilotUsage,
   fetchGeminiUsage,
+  fetchGroqUsage,
   fetchMinimaxUsage,
   fetchZaiUsage,
 } from "./provider-usage.fetch.js";
@@ -62,10 +63,12 @@ export async function loadProviderUsageSummary(
             return await fetchAntigravityUsage(auth.token, timeoutMs, fetchFn);
           case "google-gemini-cli":
             return await fetchGeminiUsage(auth.token, timeoutMs, fetchFn, auth.provider);
-          case "openai-codex":
-            return await fetchCodexUsage(auth.token, auth.accountId, timeoutMs, fetchFn);
+          case "groq":
+            return await fetchGroqUsage(auth.token, timeoutMs, fetchFn);
           case "minimax":
             return await fetchMinimaxUsage(auth.token, timeoutMs, fetchFn);
+          case "openai-codex":
+            return await fetchCodexUsage(auth.token, auth.accountId, timeoutMs, fetchFn);
           case "xiaomi":
             return {
               provider: "xiaomi",
