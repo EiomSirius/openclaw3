@@ -31,6 +31,7 @@ Docs: https://docs.openclaw.ai
 - Feishu: add Feishu/Lark plugin support + docs. (#7313) Thanks @jiulingyun (openclaw-cn).
 - Web UI: add Agents dashboard for managing agent files, tools, skills, models, channels, and cron jobs.
 - Memory: implement the opt-in QMD backend for workspace memory. (#3160) Thanks @vignesh07.
+- Memory (LanceDB): add Google Gemini embeddings support with 768-dimension vectors alongside OpenAI models (1536/3072 dimensions). Auto-detects provider from model name or allows explicit provider selection. (#6716) Thanks @Hua688.
 - Security: add healthcheck skill and bootstrap audit guidance. (#7641) Thanks @Takhoffman.
 - Config: allow setting a default subagent thinking level via `agents.defaults.subagents.thinking` (and per-agent `agents.list[].subagents.thinking`). (#7372) Thanks @tyler6204.
 - Docs: zh-CN translations seed + polish, pipeline guidance, nav/landing updates, and typo fixes. (#8202, #6995, #6619, #7242, #7303, #7415) Thanks @AaronWander, @taiyi747, @Explorer1092, @rendaoyuan, @joshp123, @lailoo.
