@@ -240,8 +240,10 @@ Triggered during session lifecycle when session persistence is enabled (requires
 
 **Context includes**:
 
-- `sessionId`: The session ID (always present; for `session:reset`, equals `newSessionId`)
-- `oldSessionId` and `newSessionId`: (for `session:reset` only) The session transition (both always present)
+- `sessionId`: The session ID (present in current implementation; for `session:reset`, equals `newSessionId`)
+- `oldSessionId` and `newSessionId`: (for `session:reset` only) The session transition (both present in current implementation)
+
+**Note:** While current implementation guards ensure these IDs are present when events fire, hooks should handle missing values defensively.
 
 **Lifecycle patterns**:
 
@@ -254,7 +256,7 @@ Triggered during agent execution when session persistence is enabled (requires a
 
 - **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
 - **`agent:reply`**: After each agent turn completes with user input or assistant output (requires at least one of `input` or `output` to be non-empty; does not fire for completely empty turns; hooks may add messages)
-- **`agent:flush`**: When memory flush is triggered (context nearing token limit)
+- **`agent:flush`**: When memory flush starts (before the flush operation runs; context nearing token limit)
 
 **Context for `agent:reply` includes**:
 

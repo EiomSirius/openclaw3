@@ -72,16 +72,19 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
   }
 
   // Trigger internal hook for reset/new commands
-  if (resetRequested && params.command.isAuthorizedSender && params.sessionKey) {
+  if (resetRequested && params.command.isAuthorizedSender) {
     const commandAction = resetMatch?.[1] ?? "new";
-    const hookEvent = createInternalHookEvent("command", commandAction, params.sessionKey, {
+    // Use stable fallback key for non-persisted flows so command hooks always fire
+    const hookSessionKey =
+      params.sessionKey ||
+      `command:${params.ctx.Provider || "unknown"}:${params.ctx.From || "unknown"}:${params.ctx.To || "unknown"}`;
+    const hookEvent = createInternalHookEvent("command", commandAction, hookSessionKey, {
       sessionEntry: params.sessionEntry ? structuredClone(params.sessionEntry) : undefined,
       previousSessionEntry: params.previousSessionEntry
         ? structuredClone(params.previousSessionEntry)
         : undefined,
       commandSource: params.command.surface,
       senderId: params.command.senderId,
-      cfg: params.cfg ? structuredClone(params.cfg) : undefined, // Pass config for LLM slug generation
     });
     await triggerInternalHook(hookEvent);
 
