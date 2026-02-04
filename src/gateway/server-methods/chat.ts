@@ -14,6 +14,8 @@ import {
   extractShortModelName,
   type ResponsePrefixContext,
 } from "../../auto-reply/reply/response-prefix-template.js";
+import { resolveSessionTranscriptsDir } from "../../config/sessions/paths.js";
+import { isPathWithinBase } from "../../infra/archive.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { INTERNAL_MESSAGE_CHANNEL } from "../../utils/message-channel.js";
 import {
@@ -57,6 +59,15 @@ function resolveTranscriptPath(params: {
 }): string | null {
   const { sessionId, storePath, sessionFile } = params;
   if (sessionFile) {
+    // Security: validate sessionFile doesn't escape the transcripts directory
+    // Prevents path traversal attacks (e.g., sessionFile: "../../../etc/passwd")
+    const baseDir = storePath ? path.dirname(storePath) : resolveSessionTranscriptsDir();
+    if (!isPathWithinBase(baseDir, sessionFile)) {
+      throw new Error(
+        `sessionFile escapes allowed directory: ${sessionFile}. ` +
+          `Path must be within ${baseDir}`,
+      );
+    }
     return sessionFile;
   }
   if (!storePath) {
@@ -636,41 +647,39 @@ export const chatHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    // Resolve transcript path
-    const transcriptPath = entry?.sessionFile
-      ? entry.sessionFile
-      : path.join(path.dirname(storePath), `${sessionId}.jsonl`);
-
-    if (!fs.existsSync(transcriptPath)) {
-      respond(
-        false,
-        undefined,
-        errorShape(ErrorCodes.INVALID_REQUEST, "transcript file not found"),
-      );
-      return;
-    }
-
-    // Build transcript entry
-    const now = Date.now();
-    const messageId = randomUUID().slice(0, 8);
-    const labelPrefix = p.label ? `[${p.label}]\n\n` : "";
-    const messageBody: Record<string, unknown> = {
-      role: "assistant",
-      content: [{ type: "text", text: `${labelPrefix}${p.message}` }],
-      timestamp: now,
-      stopReason: "injected",
-      usage: { input: 0, output: 0, totalTokens: 0 },
-    };
-    const transcriptEntry = {
-      type: "message",
-      id: messageId,
-      timestamp: new Date(now).toISOString(),
-      message: messageBody,
-    };
-
-    // Append to transcript file
+    // Append to transcript file using shared helper (includes transcript path validation)
     try {
-      fs.appendFileSync(transcriptPath, `${JSON.stringify(transcriptEntry)}\n`, "utf-8");
+      const result = appendAssistantTranscriptMessage({
+        message: p.message,
+        label: p.label,
+        sessionId,
+        storePath,
+        sessionFile: entry?.sessionFile,
+        createIfMissing: false,
+      });
+
+      if (!result.ok) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, result.error ?? "failed to inject message"),
+        );
+        return;
+      }
+
+      // Broadcast to webchat for immediate UI update
+      const chatPayload = {
+        runId: `inject-${result.messageId ?? "unknown"}`,
+        sessionKey: p.sessionKey,
+        seq: 0,
+        state: "final" as const,
+        message: result.message,
+      };
+      context.broadcast("chat", chatPayload);
+      context.nodeSendToSession(p.sessionKey, "chat", chatPayload);
+
+      respond(true, { ok: true, messageId: result.messageId });
+      return;
     } catch (err) {
       const errMessage = err instanceof Error ? err.message : String(err);
       respond(
@@ -680,18 +689,5 @@ export const chatHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-
-    // Broadcast to webchat for immediate UI update
-    const chatPayload = {
-      runId: `inject-${messageId}`,
-      sessionKey: p.sessionKey,
-      seq: 0,
-      state: "final" as const,
-      message: transcriptEntry.message,
-    };
-    context.broadcast("chat", chatPayload);
-    context.nodeSendToSession(p.sessionKey, "chat", chatPayload);
-
-    respond(true, { ok: true, messageId });
   },
 };
