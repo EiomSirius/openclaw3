@@ -31,6 +31,9 @@ import { matrixOnboardingAdapter } from "./onboarding.js";
 import { matrixOutbound } from "./outbound.js";
 import { resolveMatrixTargets } from "./resolve-targets.js";
 
+// Mutex for serializing account startup (workaround for concurrent dynamic import race condition)
+let matrixStartupLock: Promise<void> = Promise.resolve();
+
 const meta = {
   id: "matrix",
   label: "Matrix",
@@ -383,9 +386,12 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
       probe: snapshot.probe,
       lastProbeAt: snapshot.lastProbeAt ?? null,
     }),
-    probeAccount: async ({ timeoutMs, cfg }) => {
+    probeAccount: async ({ account, timeoutMs, cfg }) => {
       try {
-        const auth = await resolveMatrixAuth({ cfg: cfg as CoreConfig });
+        const auth = await resolveMatrixAuth({
+          cfg: cfg as CoreConfig,
+          accountId: account.accountId,
+        });
         return await probeMatrix({
           homeserver: auth.homeserver,
           accessToken: auth.accessToken,
@@ -424,8 +430,22 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         baseUrl: account.homeserver,
       });
       ctx.log?.info(`[${account.accountId}] starting provider (${account.homeserver ?? "matrix"})`);
+
+      // Serialize startup: wait for any previous startup to complete import phase
+      // This works around a race condition with concurrent dynamic imports
+      const previousLock = matrixStartupLock;
+      let releaseLock: () => void = () => {};
+      matrixStartupLock = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      await previousLock;
+
       // Lazy import: the monitor pulls the reply pipeline; avoid ESM init cycles.
       const { monitorMatrixProvider } = await import("./matrix/index.js");
+
+      // Release lock after import completes
+      releaseLock();
+
       return monitorMatrixProvider({
         runtime: ctx.runtime,
         abortSignal: ctx.abortSignal,
