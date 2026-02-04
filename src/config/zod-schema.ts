@@ -236,6 +236,12 @@ export const OpenClawSchema = z
           })
           .strict()
           .optional(),
+        user: z
+          .object({
+            name: z.string().max(50).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

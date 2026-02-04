@@ -75,7 +75,7 @@ import {
   resetToolStream as resetToolStreamInternal,
   type ToolStreamEntry,
 } from "./app-tool-stream.ts";
-import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
+import { resolveInjectedAssistantIdentity, resolveInjectedUserName } from "./assistant-identity.ts";
 import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
 import { loadSettings, type UiSettings } from "./storage.ts";
 import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
@@ -120,6 +120,7 @@ export class OpenClawApp extends LitElement {
   @state() assistantName = injectedAssistantIdentity.name;
   @state() assistantAvatar = injectedAssistantIdentity.avatar;
   @state() assistantAgentId = injectedAssistantIdentity.agentId ?? null;
+  @state() userName = resolveInjectedUserName();
 
   @state() sessionKey = this.settings.sessionKey;
   @state() chatLoading = false;
