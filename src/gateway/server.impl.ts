@@ -597,6 +597,7 @@ export async function startGatewayServer(
     canvasHost,
     canvasHostServer,
     stopChannel,
+    log,
     pluginServices,
     cron,
     heartbeatRunner,
