@@ -1,7 +1,6 @@
 import type { OpenClawConfig } from "../config/config.js";
 import type { DiscordAccountConfig } from "../config/types.js";
-import { DEFAULT_ACCOUNT_ID } from "../routing/session-key.js";
-import { normalizeAccountId } from "../utils/account-id.js";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
 import { resolveDiscordToken } from "./token.js";
 
 export type ResolvedDiscordAccount = {
@@ -60,7 +59,7 @@ export function resolveDiscordAccount(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
 }): ResolvedDiscordAccount {
-  const accountId = normalizeAccountId(params.accountId) ?? DEFAULT_ACCOUNT_ID;
+  const accountId = normalizeAccountId(params.accountId);
   const baseEnabled = params.cfg.channels?.discord?.enabled !== false;
   const merged = mergeDiscordAccountConfig(params.cfg, accountId);
   const accountEnabled = merged.enabled !== false;
