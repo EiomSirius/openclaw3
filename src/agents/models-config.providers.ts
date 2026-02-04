@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ModelDefinitionConfig } from "../config/types.models.js";
 import {
@@ -54,6 +57,17 @@ const MOONSHOT_DEFAULT_COST = {
   cacheWrite: 0,
 };
 
+const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
+const NVIDIA_DEFAULT_MODEL_ID = "nvidia/kimi-k2-instruct";
+const NVIDIA_DEFAULT_CONTEXT_WINDOW = 128000;
+const NVIDIA_DEFAULT_MAX_TOKENS = 8192;
+const NVIDIA_DEFAULT_COST = {
+  input: 0.27,
+  output: 0.9,
+  cacheRead: 0,
+  cacheWrite: 0,
+};
+
 const QWEN_PORTAL_BASE_URL = "https://portal.qwen.ai/v1";
 const QWEN_PORTAL_OAUTH_PLACEHOLDER = "qwen-oauth";
 const QWEN_PORTAL_DEFAULT_CONTEXT_WINDOW = 128000;
@@ -75,6 +89,46 @@ const OLLAMA_DEFAULT_COST = {
   cacheRead: 0,
   cacheWrite: 0,
 };
+
+const CC_SWITCH_BASE_URL = "http://127.0.0.1:5000";
+const CC_SWITCH_CONTEXT_WINDOW = 200000;
+const CC_SWITCH_MAX_TOKENS = 8192;
+
+interface CcSwitchSettings {
+  env?: {
+    ANTHROPIC_BASE_URL?: string;
+    ANTHROPIC_AUTH_TOKEN?: string;
+  };
+}
+
+async function isCcSwitchActive(): Promise<boolean> {
+  try {
+    const fs = await import("node:fs");
+    const claudeSettingsPath = join(homedir(), ".claude", "settings.json");
+    const claudeConfigPath = join(homedir(), ".claude", "claude.json");
+
+    let settingsPath: string | null = null;
+    if (existsSync(claudeSettingsPath)) {
+      settingsPath = claudeSettingsPath;
+    } else if (existsSync(claudeConfigPath)) {
+      settingsPath = claudeConfigPath;
+    }
+
+    if (!settingsPath) {
+      return false;
+    }
+
+    // Read the settings file
+    const content = fs.readFileSync(settingsPath, "utf-8");
+    const settings = JSON.parse(content) as CcSwitchSettings;
+
+    // Check if cc-switch proxy is configured
+    const baseUrl = settings.env?.ANTHROPIC_BASE_URL;
+    return baseUrl === CC_SWITCH_BASE_URL || (baseUrl?.startsWith("http://127.0.0.1:5") ?? false);
+  } catch {
+    return false;
+  }
+}
 
 interface OllamaModel {
   name: string;
@@ -323,6 +377,51 @@ function buildMoonshotProvider(): ProviderConfig {
   };
 }
 
+function buildNvidiaProvider(): ProviderConfig {
+  return {
+    baseUrl: NVIDIA_BASE_URL,
+    api: "openai-completions",
+    models: [
+      {
+        id: NVIDIA_DEFAULT_MODEL_ID,
+        name: "NVIDIA Kimi K2 Instruct",
+        reasoning: false,
+        input: ["text"],
+        cost: NVIDIA_DEFAULT_COST,
+        contextWindow: NVIDIA_DEFAULT_CONTEXT_WINDOW,
+        maxTokens: NVIDIA_DEFAULT_MAX_TOKENS,
+      },
+    ],
+  };
+}
+
+function buildCcSwitchProvider(): ProviderConfig {
+  return {
+    baseUrl: CC_SWITCH_BASE_URL,
+    api: "anthropic-messages",
+    models: [
+      {
+        id: "claude-sonnet-4-20250514",
+        name: "Claude Sonnet 4 (via cc-switch)",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 1.5 },
+        contextWindow: CC_SWITCH_CONTEXT_WINDOW,
+        maxTokens: CC_SWITCH_MAX_TOKENS,
+      },
+      {
+        id: "claude-haiku-4-20250514",
+        name: "Claude Haiku 4 (via cc-switch)",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 0.4 },
+        contextWindow: CC_SWITCH_CONTEXT_WINDOW,
+        maxTokens: CC_SWITCH_MAX_TOKENS,
+      },
+    ],
+  };
+}
+
 function buildQwenPortalProvider(): ProviderConfig {
   return {
     baseUrl: QWEN_PORTAL_BASE_URL,
@@ -422,6 +521,18 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "moonshot", store: authStore });
   if (moonshotKey) {
     providers.moonshot = { ...buildMoonshotProvider(), apiKey: moonshotKey };
+  }
+
+  const nvidiaKey =
+    resolveEnvApiKeyVarName("nvidia") ??
+    resolveApiKeyFromProfiles({ provider: "nvidia", store: authStore });
+  if (nvidiaKey) {
+    providers.nvidia = { ...buildNvidiaProvider(), apiKey: nvidiaKey };
+  }
+
+  // cc-switch provider - auto-detect if cc-switch proxy is active
+  if (await isCcSwitchActive()) {
+    providers["cc-switch"] = { ...buildCcSwitchProvider(), apiKey: "CC_SWITCH_MANAGED" };
   }
 
   const syntheticKey =
