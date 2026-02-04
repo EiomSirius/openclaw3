@@ -339,16 +339,14 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
   // Trigger internal hook for stop command (fires regardless of persistence outcome)
   // Use stable fallback key for non-persisted flows so command hooks always fire
   // Hash From/To to avoid PII in hook routing keys
-  const fallbackKey =
-    abortTarget.key || params.sessionKey
-      ? null
-      : `command:${params.ctx.Provider || "unknown"}:${crypto
-          .createHash("sha256")
-          .update(`${params.ctx.From || ""}:${params.ctx.To || ""}`)
-          .digest("hex")
-          .slice(0, 16)}`;
   const sessionKeyForHook =
-    abortTarget.key || params.sessionKey || fallbackKey || "command:unknown";
+    abortTarget.key ||
+    params.sessionKey ||
+    `command:${params.ctx.Provider || "unknown"}:${crypto
+      .createHash("sha256")
+      .update(`${params.ctx.From || ""}:${params.ctx.To || ""}`)
+      .digest("hex")
+      .slice(0, 16)}`;
   let hookMessages: string[] = [];
   const entry = abortTarget.entry ?? params.sessionEntry;
   const hookEvent = createInternalHookEvent("command", "stop", sessionKeyForHook, {

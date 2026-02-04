@@ -290,7 +290,7 @@ export async function runReplyAgent(params: {
     followupRun.run.sessionFile = nextSessionFile;
     activeSessionEntry = nextEntry;
     activeIsNewSession = true;
-    defaultRuntime.error(buildLogMessage(nextSessionId));
+    logVerbose(buildLogMessage(nextSessionId));
     if (cleanupTranscripts && prevSessionId) {
       const transcriptCandidates = new Set<string>();
       const resolved = resolveSessionFilePath(prevSessionId, prevEntry, { agentId });
