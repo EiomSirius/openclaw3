@@ -144,6 +144,19 @@ export type TelegramTopicConfig = {
   systemPrompt?: string;
 };
 
+/** Per-group session configuration. */
+export type TelegramGroupSessionConfig = {
+  /** Session reset configuration for this group. */
+  reset?: {
+    /** Reset mode: "daily" resets at atHour; "idle" resets after idleMinutes of inactivity. */
+    mode?: "daily" | "idle";
+    /** Hour of day (0-23) for daily reset. Default: 4. */
+    atHour?: number;
+    /** Minutes of inactivity before idle reset. */
+    idleMinutes?: number;
+  };
+};
+
 export type TelegramGroupConfig = {
   requireMention?: boolean;
   /** Optional tool policy overrides for this group. */
@@ -159,6 +172,8 @@ export type TelegramGroupConfig = {
   allowFrom?: Array<string | number>;
   /** Optional system prompt snippet for this group. */
   systemPrompt?: string;
+  /** Per-group session configuration (e.g., custom reset policy). */
+  session?: TelegramGroupSessionConfig;
 };
 
 export type TelegramConfig = {
