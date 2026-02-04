@@ -234,35 +234,38 @@ export async function buildLineMessageContext(params: BuildLineMessageContextPar
   const toAddress = isGroup ? fromAddress : `line:${userId ?? peerId}`;
   const originatingTo = isGroup ? fromAddress : `line:${userId ?? peerId}`;
 
-  const ctxPayload = finalizeInboundContext({
-    Body: body,
-    RawBody: rawBody,
-    CommandBody: rawBody,
-    From: fromAddress,
-    To: toAddress,
-    SessionKey: route.sessionKey,
-    AccountId: route.accountId,
-    ChatType: isGroup ? "group" : "direct",
-    ConversationLabel: conversationLabel,
-    GroupSubject: isGroup ? (groupId ?? roomId) : undefined,
-    SenderId: senderId,
-    Provider: "line",
-    Surface: "line",
-    MessageSid: messageId,
-    Timestamp: timestamp,
-    MediaPath: allMedia[0]?.path,
-    MediaType: allMedia[0]?.contentType,
-    MediaUrl: allMedia[0]?.path,
-    MediaPaths: allMedia.length > 0 ? allMedia.map((m) => m.path) : undefined,
-    MediaUrls: allMedia.length > 0 ? allMedia.map((m) => m.path) : undefined,
-    MediaTypes:
-      allMedia.length > 0
-        ? (allMedia.map((m) => m.contentType).filter(Boolean) as string[])
-        : undefined,
-    ...locationContext,
-    OriginatingChannel: "line" as const,
-    OriginatingTo: originatingTo,
-  });
+  const ctxPayload = finalizeInboundContext(
+    {
+      Body: body,
+      RawBody: rawBody,
+      CommandBody: rawBody,
+      From: fromAddress,
+      To: toAddress,
+      SessionKey: route.sessionKey,
+      AccountId: route.accountId,
+      ChatType: isGroup ? "group" : "direct",
+      ConversationLabel: conversationLabel,
+      GroupSubject: isGroup ? (groupId ?? roomId) : undefined,
+      SenderId: senderId,
+      Provider: "line",
+      Surface: "line",
+      MessageSid: messageId,
+      Timestamp: timestamp,
+      MediaPath: allMedia[0]?.path,
+      MediaType: allMedia[0]?.contentType,
+      MediaUrl: allMedia[0]?.path,
+      MediaPaths: allMedia.length > 0 ? allMedia.map((m) => m.path) : undefined,
+      MediaUrls: allMedia.length > 0 ? allMedia.map((m) => m.path) : undefined,
+      MediaTypes:
+        allMedia.length > 0
+          ? (allMedia.map((m) => m.contentType).filter(Boolean) as string[])
+          : undefined,
+      ...locationContext,
+      OriginatingChannel: "line" as const,
+      OriginatingTo: originatingTo,
+    },
+    { cfg },
+  );
 
   void recordSessionMetaFromInbound({
     storePath,
@@ -390,31 +393,34 @@ export async function buildLinePostbackContext(params: {
   const toAddress = isGroup ? fromAddress : `line:${userId ?? peerId}`;
   const originatingTo = isGroup ? fromAddress : `line:${userId ?? peerId}`;
 
-  const ctxPayload = finalizeInboundContext({
-    Body: body,
-    RawBody: rawBody,
-    CommandBody: rawBody,
-    From: fromAddress,
-    To: toAddress,
-    SessionKey: route.sessionKey,
-    AccountId: route.accountId,
-    ChatType: isGroup ? "group" : "direct",
-    ConversationLabel: conversationLabel,
-    GroupSubject: isGroup ? (groupId ?? roomId) : undefined,
-    SenderId: senderId,
-    Provider: "line",
-    Surface: "line",
-    MessageSid: event.replyToken ? `postback:${event.replyToken}` : `postback:${timestamp}`,
-    Timestamp: timestamp,
-    MediaPath: "",
-    MediaType: undefined,
-    MediaUrl: "",
-    MediaPaths: undefined,
-    MediaUrls: undefined,
-    MediaTypes: undefined,
-    OriginatingChannel: "line" as const,
-    OriginatingTo: originatingTo,
-  });
+  const ctxPayload = finalizeInboundContext(
+    {
+      Body: body,
+      RawBody: rawBody,
+      CommandBody: rawBody,
+      From: fromAddress,
+      To: toAddress,
+      SessionKey: route.sessionKey,
+      AccountId: route.accountId,
+      ChatType: isGroup ? "group" : "direct",
+      ConversationLabel: conversationLabel,
+      GroupSubject: isGroup ? (groupId ?? roomId) : undefined,
+      SenderId: senderId,
+      Provider: "line",
+      Surface: "line",
+      MessageSid: event.replyToken ? `postback:${event.replyToken}` : `postback:${timestamp}`,
+      Timestamp: timestamp,
+      MediaPath: "",
+      MediaType: undefined,
+      MediaUrl: "",
+      MediaPaths: undefined,
+      MediaUrls: undefined,
+      MediaTypes: undefined,
+      OriginatingChannel: "line" as const,
+      OriginatingTo: originatingTo,
+    },
+    { cfg },
+  );
 
   void recordSessionMetaFromInbound({
     storePath,

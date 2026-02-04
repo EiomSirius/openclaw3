@@ -810,6 +810,58 @@ describe("security audit", () => {
     }
   });
 
+  it("warns when allowUnsafeExternalContent is enabled for hooks", async () => {
+    const cfg: OpenClawConfig = {
+      hooks: {
+        enabled: true,
+        token: "a-long-token-for-hooks-test-24chars",
+        gmail: { allowUnsafeExternalContent: true },
+      },
+    };
+
+    const res = await runSecurityAudit({
+      config: cfg,
+      includeFilesystem: false,
+      includeChannelSecurity: false,
+    });
+
+    expect(res.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkId: "hooks.allow_unsafe_external_content",
+          severity: "warn",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when allowUnsafeExternalContent is set on a hook mapping", async () => {
+    const cfg: OpenClawConfig = {
+      hooks: {
+        enabled: true,
+        token: "a-long-token-for-hooks-test-24chars",
+        mappings: [
+          { match: { path: "/webhook" }, action: "agent", allowUnsafeExternalContent: true },
+        ],
+      },
+    };
+
+    const res = await runSecurityAudit({
+      config: cfg,
+      includeFilesystem: false,
+      includeChannelSecurity: false,
+    });
+
+    expect(res.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkId: "hooks.allow_unsafe_external_content",
+          severity: "warn",
+        }),
+      ]),
+    );
+  });
+
   it("warns when state/config look like a synced folder", async () => {
     const cfg: OpenClawConfig = {};
 

@@ -739,47 +739,50 @@ async function dispatchDiscordCommandInteraction(params: {
     parentPeer: threadParentId ? { kind: "channel", id: threadParentId } : undefined,
   });
   const conversationLabel = isDirectMessage ? (user.globalName ?? user.username) : channelId;
-  const ctxPayload = finalizeInboundContext({
-    Body: prompt,
-    RawBody: prompt,
-    CommandBody: prompt,
-    CommandArgs: commandArgs,
-    From: isDirectMessage
-      ? `discord:${user.id}`
-      : isGroupDm
-        ? `discord:group:${channelId}`
-        : `discord:channel:${channelId}`,
-    To: `slash:${user.id}`,
-    SessionKey: `agent:${route.agentId}:${sessionPrefix}:${user.id}`,
-    CommandTargetSessionKey: route.sessionKey,
-    AccountId: route.accountId,
-    ChatType: isDirectMessage ? "direct" : isGroupDm ? "group" : "channel",
-    ConversationLabel: conversationLabel,
-    GroupSubject: isGuild ? interaction.guild?.name : undefined,
-    GroupSystemPrompt: isGuild
-      ? (() => {
-          const channelTopic =
-            channel && "topic" in channel ? (channel.topic ?? undefined) : undefined;
-          const channelDescription = channelTopic?.trim();
-          const systemPromptParts = [
-            channelDescription ? `Channel topic: ${channelDescription}` : null,
-            channelConfig?.systemPrompt?.trim() || null,
-          ].filter((entry): entry is string => Boolean(entry));
-          return systemPromptParts.length > 0 ? systemPromptParts.join("\n\n") : undefined;
-        })()
-      : undefined,
-    SenderName: user.globalName ?? user.username,
-    SenderId: user.id,
-    SenderUsername: user.username,
-    SenderTag: sender.tag,
-    Provider: "discord" as const,
-    Surface: "discord" as const,
-    WasMentioned: true,
-    MessageSid: interactionId,
-    Timestamp: Date.now(),
-    CommandAuthorized: commandAuthorized,
-    CommandSource: "native" as const,
-  });
+  const ctxPayload = finalizeInboundContext(
+    {
+      Body: prompt,
+      RawBody: prompt,
+      CommandBody: prompt,
+      CommandArgs: commandArgs,
+      From: isDirectMessage
+        ? `discord:${user.id}`
+        : isGroupDm
+          ? `discord:group:${channelId}`
+          : `discord:channel:${channelId}`,
+      To: `slash:${user.id}`,
+      SessionKey: `agent:${route.agentId}:${sessionPrefix}:${user.id}`,
+      CommandTargetSessionKey: route.sessionKey,
+      AccountId: route.accountId,
+      ChatType: isDirectMessage ? "direct" : isGroupDm ? "group" : "channel",
+      ConversationLabel: conversationLabel,
+      GroupSubject: isGuild ? interaction.guild?.name : undefined,
+      GroupSystemPrompt: isGuild
+        ? (() => {
+            const channelTopic =
+              channel && "topic" in channel ? (channel.topic ?? undefined) : undefined;
+            const channelDescription = channelTopic?.trim();
+            const systemPromptParts = [
+              channelDescription ? `Channel topic: ${channelDescription}` : null,
+              channelConfig?.systemPrompt?.trim() || null,
+            ].filter((entry): entry is string => Boolean(entry));
+            return systemPromptParts.length > 0 ? systemPromptParts.join("\n\n") : undefined;
+          })()
+        : undefined,
+      SenderName: user.globalName ?? user.username,
+      SenderId: user.id,
+      SenderUsername: user.username,
+      SenderTag: sender.tag,
+      Provider: "discord" as const,
+      Surface: "discord" as const,
+      WasMentioned: true,
+      MessageSid: interactionId,
+      Timestamp: Date.now(),
+      CommandAuthorized: commandAuthorized,
+      CommandSource: "native" as const,
+    },
+    { cfg },
+  );
 
   let didReply = false;
   await dispatchReplyWithDispatcher({

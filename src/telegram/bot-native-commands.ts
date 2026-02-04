@@ -505,35 +505,40 @@ export const registerTelegramNativeCommands = ({
               ? `${msg.chat.title} id:${chatId}`
               : `group:${chatId}`
             : (buildSenderName(msg) ?? String(senderId || chatId));
-          const ctxPayload = finalizeInboundContext({
-            Body: prompt,
-            RawBody: prompt,
-            CommandBody: prompt,
-            CommandArgs: commandArgs,
-            From: isGroup ? buildTelegramGroupFrom(chatId, resolvedThreadId) : `telegram:${chatId}`,
-            To: `slash:${senderId || chatId}`,
-            ChatType: isGroup ? "group" : "direct",
-            ConversationLabel: conversationLabel,
-            GroupSubject: isGroup ? (msg.chat.title ?? undefined) : undefined,
-            GroupSystemPrompt: isGroup ? groupSystemPrompt : undefined,
-            SenderName: buildSenderName(msg),
-            SenderId: senderId || undefined,
-            SenderUsername: senderUsername || undefined,
-            Surface: "telegram",
-            MessageSid: String(msg.message_id),
-            Timestamp: msg.date ? msg.date * 1000 : undefined,
-            WasMentioned: true,
-            CommandAuthorized: commandAuthorized,
-            CommandSource: "native" as const,
-            SessionKey: `telegram:slash:${senderId || chatId}`,
-            AccountId: route.accountId,
-            CommandTargetSessionKey: sessionKey,
-            MessageThreadId: threadSpec.id,
-            IsForum: isForum,
-            // Originating context for sub-agent announce routing
-            OriginatingChannel: "telegram" as const,
-            OriginatingTo: `telegram:${chatId}`,
-          });
+          const ctxPayload = finalizeInboundContext(
+            {
+              Body: prompt,
+              RawBody: prompt,
+              CommandBody: prompt,
+              CommandArgs: commandArgs,
+              From: isGroup
+                ? buildTelegramGroupFrom(chatId, resolvedThreadId)
+                : `telegram:${chatId}`,
+              To: `slash:${senderId || chatId}`,
+              ChatType: isGroup ? "group" : "direct",
+              ConversationLabel: conversationLabel,
+              GroupSubject: isGroup ? (msg.chat.title ?? undefined) : undefined,
+              GroupSystemPrompt: isGroup ? groupSystemPrompt : undefined,
+              SenderName: buildSenderName(msg),
+              SenderId: senderId || undefined,
+              SenderUsername: senderUsername || undefined,
+              Surface: "telegram",
+              MessageSid: String(msg.message_id),
+              Timestamp: msg.date ? msg.date * 1000 : undefined,
+              WasMentioned: true,
+              CommandAuthorized: commandAuthorized,
+              CommandSource: "native" as const,
+              SessionKey: `telegram:slash:${senderId || chatId}`,
+              AccountId: route.accountId,
+              CommandTargetSessionKey: sessionKey,
+              MessageThreadId: threadSpec.id,
+              IsForum: isForum,
+              // Originating context for sub-agent announce routing
+              OriginatingChannel: "telegram" as const,
+              OriginatingTo: `telegram:${chatId}`,
+            },
+            { cfg },
+          );
 
           const disableBlockStreaming =
             typeof telegramCfg.blockStreaming === "boolean"

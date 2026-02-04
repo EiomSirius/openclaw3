@@ -25,6 +25,11 @@ const SUSPICIOUS_PATTERNS = [
   /delete\s+all\s+(emails?|files?|data)/i,
   /<\/?system>/i,
   /\]\s*\n\s*\[?(system|assistant|user)\]?:/i,
+  // Prompt-leak / instruction-extraction attempts
+  /(repeat|output|print|show|reveal|display)\s+(your\s+)?(instructions?|prompt|system\s+prompt|rules?|guidelines?)/i,
+  /what\s+are\s+your\s+(instructions?|rules?|guidelines?|system\s+prompt)/i,
+  /(ignore|bypass|disable)\s+(all\s+)?(safety|guardrails?|restrictions?)/i,
+  /override\s+your\s+(safety|instructions?|rules?)/i,
 ];
 
 /**

@@ -389,47 +389,50 @@ export function registerSlackMonitorSlashCommands(params: {
       const groupSystemPrompt =
         systemPromptParts.length > 0 ? systemPromptParts.join("\n\n") : undefined;
 
-      const ctxPayload = finalizeInboundContext({
-        Body: prompt,
-        RawBody: prompt,
-        CommandBody: prompt,
-        CommandArgs: commandArgs,
-        From: isDirectMessage
-          ? `slack:${command.user_id}`
-          : isRoom
-            ? `slack:channel:${command.channel_id}`
-            : `slack:group:${command.channel_id}`,
-        To: `slash:${command.user_id}`,
-        ChatType: isDirectMessage ? "direct" : "channel",
-        ConversationLabel:
-          resolveConversationLabel({
-            ChatType: isDirectMessage ? "direct" : "channel",
-            SenderName: senderName,
-            GroupSubject: isRoomish ? roomLabel : undefined,
-            From: isDirectMessage
-              ? `slack:${command.user_id}`
-              : isRoom
-                ? `slack:channel:${command.channel_id}`
-                : `slack:group:${command.channel_id}`,
-          }) ?? (isDirectMessage ? senderName : roomLabel),
-        GroupSubject: isRoomish ? roomLabel : undefined,
-        GroupSystemPrompt: isRoomish ? groupSystemPrompt : undefined,
-        SenderName: senderName,
-        SenderId: command.user_id,
-        Provider: "slack" as const,
-        Surface: "slack" as const,
-        WasMentioned: true,
-        MessageSid: command.trigger_id,
-        Timestamp: Date.now(),
-        SessionKey:
-          `agent:${route.agentId}:${slashCommand.sessionPrefix}:${command.user_id}`.toLowerCase(),
-        CommandTargetSessionKey: route.sessionKey,
-        AccountId: route.accountId,
-        CommandSource: "native" as const,
-        CommandAuthorized: commandAuthorized,
-        OriginatingChannel: "slack" as const,
-        OriginatingTo: `user:${command.user_id}`,
-      });
+      const ctxPayload = finalizeInboundContext(
+        {
+          Body: prompt,
+          RawBody: prompt,
+          CommandBody: prompt,
+          CommandArgs: commandArgs,
+          From: isDirectMessage
+            ? `slack:${command.user_id}`
+            : isRoom
+              ? `slack:channel:${command.channel_id}`
+              : `slack:group:${command.channel_id}`,
+          To: `slash:${command.user_id}`,
+          ChatType: isDirectMessage ? "direct" : "channel",
+          ConversationLabel:
+            resolveConversationLabel({
+              ChatType: isDirectMessage ? "direct" : "channel",
+              SenderName: senderName,
+              GroupSubject: isRoomish ? roomLabel : undefined,
+              From: isDirectMessage
+                ? `slack:${command.user_id}`
+                : isRoom
+                  ? `slack:channel:${command.channel_id}`
+                  : `slack:group:${command.channel_id}`,
+            }) ?? (isDirectMessage ? senderName : roomLabel),
+          GroupSubject: isRoomish ? roomLabel : undefined,
+          GroupSystemPrompt: isRoomish ? groupSystemPrompt : undefined,
+          SenderName: senderName,
+          SenderId: command.user_id,
+          Provider: "slack" as const,
+          Surface: "slack" as const,
+          WasMentioned: true,
+          MessageSid: command.trigger_id,
+          Timestamp: Date.now(),
+          SessionKey:
+            `agent:${route.agentId}:${slashCommand.sessionPrefix}:${command.user_id}`.toLowerCase(),
+          CommandTargetSessionKey: route.sessionKey,
+          AccountId: route.accountId,
+          CommandSource: "native" as const,
+          CommandAuthorized: commandAuthorized,
+          OriginatingChannel: "slack" as const,
+          OriginatingTo: `user:${command.user_id}`,
+        },
+        { cfg },
+      );
 
       const { counts } = await dispatchReplyWithDispatcher({
         ctx: ctxPayload,

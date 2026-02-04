@@ -60,6 +60,11 @@ console stream. This is **tools-only** and does not alter file logs.
   - Use raw regex strings (auto `gi`), or `/pattern/flags` if you need custom flags.
   - Matches are masked by keeping the first 6 + last 4 chars (length >= 18), otherwise `***`.
   - Defaults cover common key assignments, CLI flags, JSON fields, bearer headers, PEM blocks, and popular token prefixes.
+- `logging.redactPii`: when set, also redact PII/PCI in logs and tool display.
+  - `true`: use default PII entity set (credit_card, ssn, email, phone_number, ip_address, mac_address, zip_code, cvv, routing_number).
+  - `string[]`: list of entity keys to redact (e.g. `["credit_card", "ssn", "email"]`).
+  - Supported entity keys: `credit_card`, `ssn`, `email`, `phone_number`, `ip_address`, `mac_address`, `zip_code`, `cvv`, `routing_number`, `bank_account_number`, `driver_license`, `imei`, `serial_number`, `expiration_date`.
+  - Enabling PII redaction helps when messenger or tool output may contain PII/PCI; `openclaw status --all` uses the same pipeline so pasteable reports stay safe.
 
 ## Gateway WebSocket logs
 

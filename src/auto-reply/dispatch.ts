@@ -21,7 +21,7 @@ export async function dispatchInboundMessage(params: {
   replyOptions?: Omit<GetReplyOptions, "onToolResult" | "onBlockReply">;
   replyResolver?: typeof import("./reply.js").getReplyFromConfig;
 }): Promise<DispatchInboundResult> {
-  const finalized = finalizeInboundContext(params.ctx);
+  const finalized = finalizeInboundContext(params.ctx, { cfg: params.cfg });
   return await dispatchReplyFromConfig({
     ctx: finalized,
     cfg: params.cfg,

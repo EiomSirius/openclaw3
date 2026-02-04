@@ -570,66 +570,69 @@ export const buildTelegramMessageContext = async ({
   const groupSystemPrompt =
     systemPromptParts.length > 0 ? systemPromptParts.join("\n\n") : undefined;
   const commandBody = normalizeCommandBody(rawBody, { botUsername });
-  const ctxPayload = finalizeInboundContext({
-    Body: combinedBody,
-    RawBody: rawBody,
-    CommandBody: commandBody,
-    From: isGroup ? buildTelegramGroupFrom(chatId, resolvedThreadId) : `telegram:${chatId}`,
-    To: `telegram:${chatId}`,
-    SessionKey: sessionKey,
-    AccountId: route.accountId,
-    ChatType: isGroup ? "group" : "direct",
-    ConversationLabel: conversationLabel,
-    GroupSubject: isGroup ? (msg.chat.title ?? undefined) : undefined,
-    GroupSystemPrompt: isGroup ? groupSystemPrompt : undefined,
-    SenderName: senderName,
-    SenderId: senderId || undefined,
-    SenderUsername: senderUsername || undefined,
-    Provider: "telegram",
-    Surface: "telegram",
-    MessageSid: options?.messageIdOverride ?? String(msg.message_id),
-    ReplyToId: replyTarget?.id,
-    ReplyToBody: replyTarget?.body,
-    ReplyToSender: replyTarget?.sender,
-    ReplyToIsQuote: replyTarget?.kind === "quote" ? true : undefined,
-    ForwardedFrom: forwardOrigin?.from,
-    ForwardedFromType: forwardOrigin?.fromType,
-    ForwardedFromId: forwardOrigin?.fromId,
-    ForwardedFromUsername: forwardOrigin?.fromUsername,
-    ForwardedFromTitle: forwardOrigin?.fromTitle,
-    ForwardedFromSignature: forwardOrigin?.fromSignature,
-    ForwardedDate: forwardOrigin?.date ? forwardOrigin.date * 1000 : undefined,
-    Timestamp: msg.date ? msg.date * 1000 : undefined,
-    WasMentioned: isGroup ? effectiveWasMentioned : undefined,
-    // Filter out cached stickers from media - their description is already in the message body
-    MediaPath: stickerCacheHit ? undefined : allMedia[0]?.path,
-    MediaType: stickerCacheHit ? undefined : allMedia[0]?.contentType,
-    MediaUrl: stickerCacheHit ? undefined : allMedia[0]?.path,
-    MediaPaths: stickerCacheHit
-      ? undefined
-      : allMedia.length > 0
-        ? allMedia.map((m) => m.path)
-        : undefined,
-    MediaUrls: stickerCacheHit
-      ? undefined
-      : allMedia.length > 0
-        ? allMedia.map((m) => m.path)
-        : undefined,
-    MediaTypes: stickerCacheHit
-      ? undefined
-      : allMedia.length > 0
-        ? (allMedia.map((m) => m.contentType).filter(Boolean) as string[])
-        : undefined,
-    Sticker: allMedia[0]?.stickerMetadata,
-    ...(locationData ? toLocationContext(locationData) : undefined),
-    CommandAuthorized: commandAuthorized,
-    // For groups: use resolved forum topic id; for DMs: use raw messageThreadId
-    MessageThreadId: threadSpec.id,
-    IsForum: isForum,
-    // Originating channel for reply routing.
-    OriginatingChannel: "telegram" as const,
-    OriginatingTo: `telegram:${chatId}`,
-  });
+  const ctxPayload = finalizeInboundContext(
+    {
+      Body: combinedBody,
+      RawBody: rawBody,
+      CommandBody: commandBody,
+      From: isGroup ? buildTelegramGroupFrom(chatId, resolvedThreadId) : `telegram:${chatId}`,
+      To: `telegram:${chatId}`,
+      SessionKey: sessionKey,
+      AccountId: route.accountId,
+      ChatType: isGroup ? "group" : "direct",
+      ConversationLabel: conversationLabel,
+      GroupSubject: isGroup ? (msg.chat.title ?? undefined) : undefined,
+      GroupSystemPrompt: isGroup ? groupSystemPrompt : undefined,
+      SenderName: senderName,
+      SenderId: senderId || undefined,
+      SenderUsername: senderUsername || undefined,
+      Provider: "telegram",
+      Surface: "telegram",
+      MessageSid: options?.messageIdOverride ?? String(msg.message_id),
+      ReplyToId: replyTarget?.id,
+      ReplyToBody: replyTarget?.body,
+      ReplyToSender: replyTarget?.sender,
+      ReplyToIsQuote: replyTarget?.kind === "quote" ? true : undefined,
+      ForwardedFrom: forwardOrigin?.from,
+      ForwardedFromType: forwardOrigin?.fromType,
+      ForwardedFromId: forwardOrigin?.fromId,
+      ForwardedFromUsername: forwardOrigin?.fromUsername,
+      ForwardedFromTitle: forwardOrigin?.fromTitle,
+      ForwardedFromSignature: forwardOrigin?.fromSignature,
+      ForwardedDate: forwardOrigin?.date ? forwardOrigin.date * 1000 : undefined,
+      Timestamp: msg.date ? msg.date * 1000 : undefined,
+      WasMentioned: isGroup ? effectiveWasMentioned : undefined,
+      // Filter out cached stickers from media - their description is already in the message body
+      MediaPath: stickerCacheHit ? undefined : allMedia[0]?.path,
+      MediaType: stickerCacheHit ? undefined : allMedia[0]?.contentType,
+      MediaUrl: stickerCacheHit ? undefined : allMedia[0]?.path,
+      MediaPaths: stickerCacheHit
+        ? undefined
+        : allMedia.length > 0
+          ? allMedia.map((m) => m.path)
+          : undefined,
+      MediaUrls: stickerCacheHit
+        ? undefined
+        : allMedia.length > 0
+          ? allMedia.map((m) => m.path)
+          : undefined,
+      MediaTypes: stickerCacheHit
+        ? undefined
+        : allMedia.length > 0
+          ? (allMedia.map((m) => m.contentType).filter(Boolean) as string[])
+          : undefined,
+      Sticker: allMedia[0]?.stickerMetadata,
+      ...(locationData ? toLocationContext(locationData) : undefined),
+      CommandAuthorized: commandAuthorized,
+      // For groups: use resolved forum topic id; for DMs: use raw messageThreadId
+      MessageThreadId: threadSpec.id,
+      IsForum: isForum,
+      // Originating channel for reply routing.
+      OriginatingChannel: "telegram" as const,
+      OriginatingTo: `telegram:${chatId}`,
+    },
+    { cfg },
+  );
 
   await recordInboundSession({
     storePath,

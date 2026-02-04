@@ -108,6 +108,16 @@ export type LoggingConfig = {
   redactSensitive?: "off" | "tools";
   /** Regex patterns used to redact sensitive tokens (defaults apply when unset). */
   redactPatterns?: string[];
+  /** When true, use DEFAULT_PII_ENTITIES for output redaction; when string[], use those entity keys. */
+  redactPii?: boolean | string[];
+};
+
+/** PII handling at message ingestion (detect-only or redact before storage/agent). */
+export type MessagingPiiConfig = {
+  /** "off" = no PII handling; "detect" = log detected types only; "redact" = replace PII before storage/agent. */
+  piiAtIngestion?: "off" | "detect" | "redact";
+  /** Entity keys to use at ingestion; when unset, use same default as logging.redactPii. */
+  redactPiiEntities?: string[];
 };
 
 export type DiagnosticsOtelConfig = {

@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import type { OpenClawConfig } from "../config/config.js";
+import { DEFAULT_PII_ENTITIES, getPiiPatternsForEntities } from "./pii-patterns.js";
 
 const requireConfig = createRequire(import.meta.url);
 
@@ -35,9 +36,11 @@ const DEFAULT_REDACT_PATTERNS: string[] = [
   String.raw`\b(\d{6,}:[A-Za-z0-9_-]{20,})\b`,
 ];
 
-type RedactOptions = {
+export type RedactOptions = {
   mode?: RedactSensitiveMode;
   patterns?: string[];
+  /** When true, append DEFAULT_PII_ENTITIES patterns; when string[], append those entity keys. */
+  redactPii?: boolean | string[];
 };
 
 function normalizeMode(value?: string): RedactSensitiveMode {
@@ -60,9 +63,22 @@ function parsePattern(raw: string): RegExp | null {
   }
 }
 
-function resolvePatterns(value?: string[]): RegExp[] {
-  const source = value?.length ? value : DEFAULT_REDACT_PATTERNS;
-  return source.map(parsePattern).filter((re): re is RegExp => Boolean(re));
+function resolveEffectivePatternSources(options?: RedactOptions): string[] {
+  const base = options?.patterns ?? DEFAULT_REDACT_PATTERNS;
+  const baseSources = base.length ? base : DEFAULT_REDACT_PATTERNS;
+  const redactPii = options?.redactPii;
+  const piiSources =
+    redactPii === true
+      ? getPiiPatternsForEntities([...DEFAULT_PII_ENTITIES])
+      : Array.isArray(redactPii)
+        ? getPiiPatternsForEntities(redactPii)
+        : [];
+  return [...baseSources, ...piiSources];
+}
+
+function resolvePatterns(options?: RedactOptions): RegExp[] {
+  const sources = resolveEffectivePatternSources(options);
+  return sources.map(parsePattern).filter((re): re is RegExp => Boolean(re));
 }
 
 function maskToken(token: string): string {
@@ -105,7 +121,7 @@ function redactText(text: string, patterns: RegExp[]): string {
   return next;
 }
 
-function resolveConfigRedaction(): RedactOptions {
+export function resolveConfigRedaction(): RedactOptions {
   let cfg: OpenClawConfig["logging"] | undefined;
   try {
     const loaded = requireConfig("../config/config.js") as {
@@ -118,6 +134,7 @@ function resolveConfigRedaction(): RedactOptions {
   return {
     mode: normalizeMode(cfg?.redactSensitive),
     patterns: cfg?.redactPatterns,
+    redactPii: cfg?.redactPii,
   };
 }
 
@@ -129,7 +146,7 @@ export function redactSensitiveText(text: string, options?: RedactOptions): stri
   if (normalizeMode(resolved.mode) === "off") {
     return text;
   }
-  const patterns = resolvePatterns(resolved.patterns);
+  const patterns = resolvePatterns(resolved);
   if (!patterns.length) {
     return text;
   }

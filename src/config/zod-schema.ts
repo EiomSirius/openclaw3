@@ -181,6 +181,16 @@ export const OpenClawSchema = z
           .optional(),
         redactSensitive: z.union([z.literal("off"), z.literal("tools")]).optional(),
         redactPatterns: z.array(z.string()).optional(),
+        redactPii: z.union([z.boolean(), z.array(z.string())]).optional(),
+      })
+      .strict()
+      .optional(),
+    messaging: z
+      .object({
+        piiAtIngestion: z
+          .union([z.literal("off"), z.literal("detect"), z.literal("redact")])
+          .optional(),
+        redactPiiEntities: z.array(z.string()).optional(),
       })
       .strict()
       .optional(),

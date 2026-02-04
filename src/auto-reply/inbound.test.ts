@@ -99,6 +99,45 @@ describe("finalizeInboundContext", () => {
     finalizeInboundContext(ctx, { forceBodyForCommands: true });
     expect(ctx.BodyForCommands).toBe("say hi");
   });
+
+  it("redacts PII in Body when cfg.messaging.piiAtIngestion is redact", () => {
+    const ctx: MsgContext = {
+      Body: "My SSN is 123-45-6789 and email user@example.com",
+      RawBody: "My SSN is 123-45-6789",
+      ChatType: "direct",
+      From: "telegram:123",
+    };
+    const out = finalizeInboundContext(ctx, {
+      cfg: { messaging: { piiAtIngestion: "redact" } },
+    });
+    expect(out.Body).not.toContain("123-45-6789");
+    expect(out.Body).not.toContain("user@example.com");
+    expect(out.Body).toContain("[REDACTED]");
+    expect(out.RawBody).not.toContain("123-45-6789");
+    expect(out.BodyForAgent).not.toContain("123-45-6789");
+  });
+
+  it("leaves body unchanged when cfg.messaging.piiAtIngestion is detect", () => {
+    const ctx: MsgContext = {
+      Body: "My SSN is 123-45-6789",
+      ChatType: "direct",
+      From: "telegram:123",
+    };
+    const out = finalizeInboundContext(ctx, {
+      cfg: { messaging: { piiAtIngestion: "detect" } },
+    });
+    expect(out.Body).toBe("My SSN is 123-45-6789");
+  });
+
+  it("leaves body unchanged when cfg is not set", () => {
+    const ctx: MsgContext = {
+      Body: "My SSN is 123-45-6789",
+      ChatType: "direct",
+      From: "telegram:123",
+    };
+    const out = finalizeInboundContext(ctx);
+    expect(out.Body).toBe("My SSN is 123-45-6789");
+  });
 });
 
 describe("formatInboundBodyWithSenderMeta", () => {

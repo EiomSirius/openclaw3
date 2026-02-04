@@ -1,3 +1,5 @@
+import { redactSensitiveText, resolveConfigRedaction } from "../../logging/redact.js";
+
 export const formatAge = (ms: number | null | undefined) => {
   if (!ms || ms < 0) {
     return "unknown";
@@ -47,16 +49,10 @@ export function formatGatewayAuthUsed(
   return "none";
 }
 
+/** Redacts secrets (and PII when config enables it) for pasteable status reports. */
 export function redactSecrets(text: string): string {
   if (!text) {
     return text;
   }
-  let out = text;
-  out = out.replace(
-    /(\b(?:access[_-]?token|refresh[_-]?token|token|password|secret|api[_-]?key)\b\s*[:=]\s*)("?)([^"\\s]+)("?)/gi,
-    "$1$2***$4",
-  );
-  out = out.replace(/\bBearer\s+[A-Za-z0-9._-]+\b/g, "Bearer ***");
-  out = out.replace(/\bsk-[A-Za-z0-9]{10,}\b/g, "sk-***");
-  return out;
+  return redactSensitiveText(text, resolveConfigRedaction());
 }

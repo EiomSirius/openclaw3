@@ -122,32 +122,35 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       });
     }
     const signalTo = entry.isGroup ? `group:${entry.groupId}` : `signal:${entry.senderRecipient}`;
-    const ctxPayload = finalizeInboundContext({
-      Body: combinedBody,
-      RawBody: entry.bodyText,
-      CommandBody: entry.bodyText,
-      From: entry.isGroup
-        ? `group:${entry.groupId ?? "unknown"}`
-        : `signal:${entry.senderRecipient}`,
-      To: signalTo,
-      SessionKey: route.sessionKey,
-      AccountId: route.accountId,
-      ChatType: entry.isGroup ? "group" : "direct",
-      ConversationLabel: fromLabel,
-      GroupSubject: entry.isGroup ? (entry.groupName ?? undefined) : undefined,
-      SenderName: entry.senderName,
-      SenderId: entry.senderDisplay,
-      Provider: "signal" as const,
-      Surface: "signal" as const,
-      MessageSid: entry.messageId,
-      Timestamp: entry.timestamp ?? undefined,
-      MediaPath: entry.mediaPath,
-      MediaType: entry.mediaType,
-      MediaUrl: entry.mediaPath,
-      CommandAuthorized: entry.commandAuthorized,
-      OriginatingChannel: "signal" as const,
-      OriginatingTo: signalTo,
-    });
+    const ctxPayload = finalizeInboundContext(
+      {
+        Body: combinedBody,
+        RawBody: entry.bodyText,
+        CommandBody: entry.bodyText,
+        From: entry.isGroup
+          ? `group:${entry.groupId ?? "unknown"}`
+          : `signal:${entry.senderRecipient}`,
+        To: signalTo,
+        SessionKey: route.sessionKey,
+        AccountId: route.accountId,
+        ChatType: entry.isGroup ? "group" : "direct",
+        ConversationLabel: fromLabel,
+        GroupSubject: entry.isGroup ? (entry.groupName ?? undefined) : undefined,
+        SenderName: entry.senderName,
+        SenderId: entry.senderDisplay,
+        Provider: "signal" as const,
+        Surface: "signal" as const,
+        MessageSid: entry.messageId,
+        Timestamp: entry.timestamp ?? undefined,
+        MediaPath: entry.mediaPath,
+        MediaType: entry.mediaType,
+        MediaUrl: entry.mediaPath,
+        CommandAuthorized: entry.commandAuthorized,
+        OriginatingChannel: "signal" as const,
+        OriginatingTo: signalTo,
+      },
+      { cfg: deps.cfg },
+    );
 
     await recordInboundSession({
       storePath,

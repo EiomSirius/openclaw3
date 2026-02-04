@@ -91,4 +91,68 @@ describe("redactSensitiveText", () => {
     });
     expect(output).toBe(input);
   });
+
+  describe("PII redaction (redactPii)", () => {
+    it("redacts SSN when redactPii is true", () => {
+      const input = "My SSN is 123-45-6789.";
+      const output = redactSensitiveText(input, {
+        mode: "tools",
+        patterns: defaults,
+        redactPii: true,
+      });
+      expect(output).not.toContain("123-45-6789");
+    });
+
+    it("redacts credit card when redactPii is true", () => {
+      const input = "Card: 4111 1111 1111 1111";
+      const output = redactSensitiveText(input, {
+        mode: "tools",
+        patterns: defaults,
+        redactPii: true,
+      });
+      expect(output).not.toContain("4111");
+    });
+
+    it("redacts email when redactPii is true", () => {
+      const input = "Contact user@example.com for help.";
+      const output = redactSensitiveText(input, {
+        mode: "tools",
+        patterns: defaults,
+        redactPii: true,
+      });
+      expect(output).not.toContain("user@example.com");
+    });
+
+    it("redacts phone when redactPii is true", () => {
+      const input = "Call me at (555) 123-4567";
+      const output = redactSensitiveText(input, {
+        mode: "tools",
+        patterns: defaults,
+        redactPii: true,
+      });
+      expect(output).not.toContain("555");
+      expect(output).not.toContain("123-4567");
+    });
+
+    it("leaves benign text unchanged when redactPii is true", () => {
+      const input = "Hi, can you help me schedule a meeting?";
+      const output = redactSensitiveText(input, {
+        mode: "tools",
+        patterns: defaults,
+        redactPii: true,
+      });
+      expect(output).toBe(input);
+    });
+
+    it("redacts only specified entities when redactPii is string[]", () => {
+      const input = "SSN 123-45-6789 and user@example.com";
+      const output = redactSensitiveText(input, {
+        mode: "tools",
+        patterns: defaults,
+        redactPii: ["ssn"],
+      });
+      expect(output).not.toContain("123-45-6789");
+      expect(output).toContain("user@example.com");
+    });
+  });
 });

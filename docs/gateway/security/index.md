@@ -271,6 +271,25 @@ Recommendations:
 - When running small models, **enable sandboxing for all sessions** and **disable web_search/web_fetch/browser** unless inputs are tightly controlled.
 - For chat-only personal assistants with trusted input and no tools, smaller models are usually fine.
 
+### Guardrails and external content
+
+OpenClaw applies **external content safety wrapping** to reduce prompt-injection risk when the agent processes content from untrusted sources. Wrapping adds clear boundaries and a security notice so the model does not treat that content as system instructions.
+
+**Where wrapping is applied**
+
+- **Cron/hooks path only**: Gmail push, webhook-triggered jobs, and other hook-triggered agent runs. Inbound message bodies (email text, webhook payloads) are wrapped with boundaries and a "SECURITY NOTICE" before being sent to the agent. Suspicious patterns (e.g. "ignore previous instructions", "reveal your prompt") are logged for monitoring; content is still processed but wrapped.
+
+**Where wrapping is not applied**
+
+- **Channel messages** (Telegram, Discord, WhatsApp, Slack, etc.): Inbound messages go to the agent without this wrapping. Trust is enforced by allowlists, pairing, and group policies; content from strangers in groups is still raw input to the model. Rely on allowlists and model tier (see above).
+- **OpenAI/OpenResponses HTTP API**: Requests from third-party callers are not wrapped. If you expose these endpoints, treat API message content as untrusted and lock down auth and network access.
+
+**Best practices**
+
+- Keep hooks and Gmail content wrapped (do not set `allowUnsafeExternalContent` unless you have a specific need). `openclaw security audit` warns when external content wrapping is disabled for hooks.
+- Use allowlists and pairing so only intended senders can trigger the bot on channels.
+- For any agent that handles untrusted content, prefer a stronger model and reduce tool blast radius (sandboxing, strict allowlists).
+
 ## Reasoning & verbose output in groups
 
 `/reasoning` and `/verbose` can expose internal reasoning or tool output that
@@ -500,6 +519,8 @@ Recommendations:
 
 - Keep tool summary redaction on (`logging.redactSensitive: "tools"`; default).
 - Add custom patterns for your environment via `logging.redactPatterns` (tokens, hostnames, internal URLs).
+- Optionally enable PII redaction: `logging.redactPii: true` (or a list of entity keys) so credit card, SSN, email, phone, etc. are masked in logs and tool display; `openclaw status --all` uses the same pipeline.
+- For inbound messages, optional ingestion redaction: `messaging.piiAtIngestion: "redact"` (or `"detect"` to log only) and optional `messaging.redactPiiEntities`. See [Logging](/gateway/logging) for entity keys.
 - When sharing diagnostics, prefer `openclaw status --all` (pasteable, secrets redacted) over raw logs.
 - Prune old session transcripts and log files if you don’t need long retention.
 

@@ -17,9 +17,10 @@ import {
   collectHooksHardeningFindings,
   collectIncludeFilePermFindings,
   collectModelHygieneFindings,
-  collectSmallModelRiskFindings,
+  collectPiiRedactionFindings,
   collectPluginsTrustFindings,
   collectSecretsInConfigFindings,
+  collectSmallModelRiskFindings,
   collectStateDeepFilesystemFindings,
   collectSyncedFolderFindings,
   readConfigSnapshotForAudit,
@@ -926,6 +927,7 @@ export async function runSecurityAudit(opts: SecurityAuditOptions): Promise<Secu
   findings.push(...collectLoggingFindings(cfg));
   findings.push(...collectElevatedFindings(cfg));
   findings.push(...collectHooksHardeningFindings(cfg));
+  findings.push(...collectPiiRedactionFindings(cfg));
   findings.push(...collectSecretsInConfigFindings(cfg));
   findings.push(...collectModelHygieneFindings(cfg));
   findings.push(...collectSmallModelRiskFindings({ cfg, env }));

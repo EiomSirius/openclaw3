@@ -219,6 +219,55 @@ export function collectHooksHardeningFindings(cfg: OpenClawConfig): SecurityAudi
     });
   }
 
+  // Warn when external content safety wrapping is disabled for hooks (untrusted email/webhook input).
+  const gmailAllowUnsafe = cfg.hooks?.gmail?.allowUnsafeExternalContent === true;
+  const mappings = Array.isArray(cfg.hooks?.mappings) ? cfg.hooks.mappings : [];
+  const mappingAllowsUnsafe = mappings.some(
+    (m) =>
+      m &&
+      typeof m === "object" &&
+      (m as { allowUnsafeExternalContent?: boolean }).allowUnsafeExternalContent === true,
+  );
+  if (gmailAllowUnsafe || mappingAllowsUnsafe) {
+    findings.push({
+      checkId: "hooks.allow_unsafe_external_content",
+      severity: "warn",
+      title: "External content safety wrapping is disabled for hooks",
+      detail:
+        "allowUnsafeExternalContent is enabled for Gmail or one or more hook mappings. " +
+        "Untrusted email/webhook content will be sent to the agent without security boundaries; consider enabling wrapping to reduce prompt-injection risk.",
+      remediation:
+        "Remove hooks.gmail.allowUnsafeExternalContent and allowUnsafeExternalContent from hook mappings unless you explicitly need raw content.",
+    });
+  }
+
+  return findings;
+}
+
+/**
+ * Info-level finding when PII redaction is not enabled. Suggests enabling
+ * logging.redactPii and/or messaging.piiAtIngestion if messenger or tool output may contain PII/PCI.
+ */
+export function collectPiiRedactionFindings(cfg: OpenClawConfig): SecurityAuditFinding[] {
+  const findings: SecurityAuditFinding[] = [];
+  const redactPii = cfg.logging?.redactPii;
+  const piiAtIngestion = cfg.messaging?.piiAtIngestion ?? "off";
+  const hasOutputPii = redactPii === true || (Array.isArray(redactPii) && redactPii.length > 0);
+  const hasIngestionPii = piiAtIngestion === "detect" || piiAtIngestion === "redact";
+  if (!hasOutputPii && !hasIngestionPii) {
+    findings.push({
+      checkId: "pii.redaction_not_enabled",
+      severity: "info",
+      title: "PII/PCI redaction is not enabled",
+      detail:
+        "logging.redactPii is not set and messaging.piiAtIngestion is off. " +
+        "If messenger or tool output can contain PII/PCI (credit card, SSN, email, phone, etc.), " +
+        "consider enabling output redaction (logging.redactPii: true or entity list) and/or " +
+        "ingestion redaction (messaging.piiAtIngestion: detect or redact).",
+      remediation:
+        'Set logging.redactPii: true for default PII entities in logs/tool display, or messaging.piiAtIngestion: "redact" to redact PII in inbound message bodies before storage. See docs/gateway/logging and docs/gateway/security.',
+    });
+  }
   return findings;
 }
 

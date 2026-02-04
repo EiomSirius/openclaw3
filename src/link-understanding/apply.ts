@@ -31,6 +31,7 @@ export async function applyLinkUnderstanding(params: {
   finalizeInboundContext(params.ctx, {
     forceBodyForAgent: true,
     forceBodyForCommands: true,
+    cfg: params.cfg,
   });
 
   return result;

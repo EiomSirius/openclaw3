@@ -113,7 +113,7 @@ export async function getReplyFromConfig(
   });
   opts?.onTypingController?.(typing);
 
-  const finalized = finalizeInboundContext(ctx);
+  const finalized = finalizeInboundContext(ctx, { cfg });
 
   if (!isFastTestEnv) {
     await applyMediaUnderstanding({
