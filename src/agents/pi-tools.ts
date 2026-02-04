@@ -100,6 +100,7 @@ function resolveExecConfig(cfg: OpenClawConfig | undefined) {
     cleanupMs: globalExec?.cleanupMs,
     notifyOnExit: globalExec?.notifyOnExit,
     applyPatch: globalExec?.applyPatch,
+    commandCheck: globalExec?.commandCheck,
   };
 }
 
@@ -284,6 +285,7 @@ export function createOpenClawCodingTools(options?: {
     approvalRunningNoticeMs:
       options?.exec?.approvalRunningNoticeMs ?? execConfig.approvalRunningNoticeMs,
     notifyOnExit: options?.exec?.notifyOnExit ?? execConfig.notifyOnExit,
+    commandCheck: options?.exec?.commandCheck ?? execConfig.commandCheck,
     sandbox: sandbox
       ? {
           containerName: sandbox.containerName,

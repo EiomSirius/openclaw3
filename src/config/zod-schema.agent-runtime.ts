@@ -283,6 +283,14 @@ export const AgentToolsSchema = z
           })
           .strict()
           .optional(),
+        commandCheck: z
+          .object({
+            enabled: z.boolean().optional(),
+            timeoutMs: z.number().int().positive().optional(),
+            blockOnError: z.boolean().optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -523,6 +531,14 @@ export const ToolsSchema = z
           .object({
             enabled: z.boolean().optional(),
             allowModels: z.array(z.string()).optional(),
+          })
+          .strict()
+          .optional(),
+        commandCheck: z
+          .object({
+            enabled: z.boolean().optional(),
+            timeoutMs: z.number().int().positive().optional(),
+            blockOnError: z.boolean().optional(),
           })
           .strict()
           .optional(),

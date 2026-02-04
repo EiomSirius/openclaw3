@@ -2030,6 +2030,60 @@ of `every`, keep `HEARTBEAT.md` tiny, and/or choose a cheaper `model`.
 - `applyPatch.allowModels`: optional allowlist of model ids (e.g. `gpt-5.2` or `openai/gpt-5.2`)
   Note: `applyPatch` is only under `tools.exec`.
 
+### Command Security Check
+
+`tools.exec.commandCheck` validates shell commands using [tirith](https://github.com/sheeki03/tirith) before execution. Tirith detects malicious URLs, homograph attacks, and pipe-to-shell patterns.
+
+**Install tirith** (external dependency):
+
+```bash
+cargo install tirith
+# or
+brew install sheeki03/tap/tirith
+```
+
+**Configuration:**
+
+```json5
+{
+  tools: {
+    exec: {
+      commandCheck: {
+        enabled: true, // Enable validation (default: true)
+        timeoutMs: 5000, // Check timeout (default: 5000ms)
+        blockOnError: false, // Fail-open on errors (default: false)
+      },
+    },
+  },
+}
+```
+
+**Behavior:**
+
+| Scenario               | Result                                         |
+| ---------------------- | ---------------------------------------------- |
+| tirith returns `block` | Command rejected with error                    |
+| tirith returns `warn`  | Warning shown in approval UI, command proceeds |
+| tirith not installed   | Graceful skip (logged once), commands proceed  |
+| tirith times out       | Allow (unless `blockOnError: true`)            |
+
+**Edge cases:**
+
+- **Short-circuit persistence:** After tirith is detected as missing (ENOENT), the check remains disabled for the process lifetime. Restart the gateway if you install tirith later.
+- **blockOnError + missing tirith:** When `blockOnError: true`, missing tirith blocks all commands. Use this for strict environments where security tooling is mandatory.
+
+To disable command security checks entirely:
+
+```json5
+{
+  tools: {
+    exec: {
+      commandCheck: { enabled: false },
+    },
+  },
+}
+```
+
 `tools.web` configures web search + fetch tools:
 
 - `tools.web.search.enabled` (default: true when key is present)

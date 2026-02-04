@@ -30,6 +30,11 @@ import { logInfo, logWarn } from "../logger.js";
 import { formatSpawnError, spawnWithFallback } from "../process/spawn-utils.js";
 import { parseAgentSessionKey, resolveAgentIdFromSessionKey } from "../routing/session-key.js";
 import {
+  checkCommandSecurity,
+  formatSecurityWarning,
+  type CommandCheckConfig,
+} from "../security/command-security.js";
+import {
   type ProcessSession,
   type SessionStdin,
   addSession,
@@ -182,6 +187,8 @@ export type ExecToolDefaults = {
   messageProvider?: string;
   notifyOnExit?: boolean;
   cwd?: string;
+  /** Command security validation config. */
+  commandCheck?: CommandCheckConfig;
 };
 
 export type { BashSandboxConfig } from "./bash-tools.shared.js";
@@ -852,6 +859,32 @@ export function createExecTool(
       const maxOutput = DEFAULT_MAX_OUTPUT;
       const pendingMaxOutput = DEFAULT_PENDING_MAX_OUTPUT;
       const warnings: string[] = [];
+
+      // Command security validation (tirith)
+      const commandCheckConfig = defaults?.commandCheck;
+      const securityVerdict = checkCommandSecurity(params.command, commandCheckConfig);
+
+      if (securityVerdict.action === "block") {
+        // Use finding title if available, otherwise indicate check failure
+        const reason = securityVerdict.findings[0]?.title ?? "security check failed";
+        throw new Error(`exec denied: ${reason}`);
+      }
+
+      if (securityVerdict.action === "warn") {
+        const warningText = formatSecurityWarning(securityVerdict.findings);
+        if (warningText) {
+          warnings.push(warningText);
+        }
+        // Log first finding title if available; use truncateMiddle to avoid leaking secrets
+        const firstTitle = securityVerdict.findings[0]?.title;
+        const cmdSnippet = truncateMiddle(params.command, 60);
+        if (firstTitle) {
+          logWarn(`Security warning for command: ${firstTitle} (${cmdSnippet})`);
+        } else {
+          logWarn(`Security warning for command: ${cmdSnippet}`);
+        }
+      }
+
       const backgroundRequested = params.background === true;
       const yieldRequested = typeof params.yieldMs === "number";
       if (!allowBackground && (backgroundRequested || yieldRequested)) {

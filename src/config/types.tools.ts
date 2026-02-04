@@ -160,6 +160,16 @@ export type GroupToolPolicyConfig = {
 
 export type GroupToolPolicyBySenderConfig = Record<string, GroupToolPolicyConfig>;
 
+/** Command security validation configuration. */
+export type CommandCheckConfig = {
+  /** Enable command validation before execution (default: true). */
+  enabled?: boolean;
+  /** Timeout in milliseconds for tirith check (default: 5000). */
+  timeoutMs?: number;
+  /** Block execution if tirith check fails with an error (default: false). */
+  blockOnError?: boolean;
+};
+
 export type ExecToolConfig = {
   /** Exec host routing (default: sandbox). */
   host?: "sandbox" | "gateway" | "node";
@@ -193,6 +203,8 @@ export type ExecToolConfig = {
      */
     allowModels?: string[];
   };
+  /** Command security validation configuration. */
+  commandCheck?: CommandCheckConfig;
 };
 
 export type AgentToolsConfig = {

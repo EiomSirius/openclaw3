@@ -173,6 +173,9 @@ const FIELD_LABELS: Record<string, string> = {
   "agents.list[].tools.byProvider": "Agent Tool Policy by Provider",
   "tools.exec.applyPatch.enabled": "Enable apply_patch",
   "tools.exec.applyPatch.allowModels": "apply_patch Model Allowlist",
+  "tools.exec.commandCheck.enabled": "Command Security Check",
+  "tools.exec.commandCheck.timeoutMs": "Security Check Timeout",
+  "tools.exec.commandCheck.blockOnError": "Block on Check Error",
   "tools.exec.notifyOnExit": "Exec Notify On Exit",
   "tools.exec.approvalRunningNoticeMs": "Exec Approval Running Notice (ms)",
   "tools.exec.host": "Exec Host",
@@ -451,6 +454,12 @@ const FIELD_HELP: Record<string, string> = {
     "Experimental. Enables apply_patch for OpenAI models when allowed by tool policy.",
   "tools.exec.applyPatch.allowModels":
     'Optional allowlist of model ids (e.g. "gpt-5.2" or "openai/gpt-5.2").',
+  "tools.exec.commandCheck.enabled":
+    "Enable tirith command validation before execution (default: true).",
+  "tools.exec.commandCheck.timeoutMs":
+    "Timeout in milliseconds for security check (default: 5000).",
+  "tools.exec.commandCheck.blockOnError":
+    "Block execution if security check fails with an error (default: false, fail-open).",
   "tools.exec.notifyOnExit":
     "When true (default), backgrounded exec sessions enqueue a system event and request a heartbeat on exit.",
   "tools.exec.pathPrepend": "Directories to prepend to PATH for exec runs (gateway/sandbox).",
