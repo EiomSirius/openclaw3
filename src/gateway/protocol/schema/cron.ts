@@ -78,7 +78,9 @@ export const CronPayloadPatchSchema = Type.Union([
 export const CronIsolationSchema = Type.Object(
   {
     postToMainPrefix: Type.Optional(Type.String()),
-    postToMainMode: Type.Optional(Type.Union([Type.Literal("summary"), Type.Literal("full")])),
+    postToMainMode: Type.Optional(
+      Type.Union([Type.Literal("summary"), Type.Literal("full"), Type.Literal("off")]),
+    ),
     postToMainMaxChars: Type.Optional(Type.Integer({ minimum: 0 })),
   },
   { additionalProperties: false },

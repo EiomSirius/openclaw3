@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import { Option, type Command } from "commander";
 import type { CronJob } from "../../cron/types.js";
 import type { GatewayRpcOpts } from "../gateway-rpc.js";
 import { danger } from "../../globals.js";
@@ -92,10 +92,10 @@ export function registerCronAddCommand(cron: Command) {
       )
       .option("--best-effort-deliver", "Do not fail the job if delivery fails", false)
       .option("--post-prefix <prefix>", "Prefix for main-session post", "Cron")
-      .option(
-        "--post-mode <mode>",
-        "What to post back to main for isolated jobs (summary|full)",
-        "summary",
+      .addOption(
+        new Option("--post-mode <mode>", "What to post back to main for isolated jobs")
+          .choices(["summary", "full", "off"])
+          .default("summary"),
       )
       .option("--post-max-chars <n>", "Max chars when --post-mode=full (default 8000)", "8000")
       .option("--json", "Output JSON", false)
@@ -191,7 +191,9 @@ export function registerCronAddCommand(cron: Command) {
                       ? opts.postPrefix.trim()
                       : "Cron",
                   postToMainMode:
-                    opts.postMode === "full" || opts.postMode === "summary"
+                    opts.postMode === "full" ||
+                    opts.postMode === "summary" ||
+                    opts.postMode === "off"
                       ? opts.postMode
                       : undefined,
                   postToMainMaxChars:

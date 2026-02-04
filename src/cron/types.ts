@@ -47,8 +47,9 @@ export type CronIsolation = {
    * What to post back into the main session after an isolated run.
    * - summary: small status/summary line (default)
    * - full: the agent's final text output (optionally truncated)
+   * - off: do not post anything to main session
    */
-  postToMainMode?: "summary" | "full";
+  postToMainMode?: "summary" | "full" | "off";
   /** Max chars when postToMainMode="full". Default: 8000. */
   postToMainMaxChars?: number;
 };

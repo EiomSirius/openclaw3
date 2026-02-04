@@ -126,26 +126,29 @@ export async function executeJob(
     }
 
     if (job.sessionTarget === "isolated") {
-      const prefix = job.isolation?.postToMainPrefix?.trim() || "Cron";
       const mode = job.isolation?.postToMainMode ?? "summary";
 
-      let body = (summary ?? err ?? status).trim();
-      if (mode === "full") {
-        // Prefer full agent output if available; fall back to summary.
-        const maxCharsRaw = job.isolation?.postToMainMaxChars;
-        const maxChars = Number.isFinite(maxCharsRaw) ? Math.max(0, maxCharsRaw as number) : 8000;
-        const fullText = (outputText ?? "").trim();
-        if (fullText) {
-          body = fullText.length > maxChars ? `${fullText.slice(0, maxChars)}…` : fullText;
+      // Skip posting to main session and heartbeat wake if mode is "off"
+      if (mode !== "off") {
+        const prefix = job.isolation?.postToMainPrefix?.trim() || "Cron";
+        let body = (summary ?? err ?? status).trim();
+        if (mode === "full") {
+          // Prefer full agent output if available; fall back to summary.
+          const maxCharsRaw = job.isolation?.postToMainMaxChars;
+          const maxChars = Number.isFinite(maxCharsRaw) ? Math.max(0, maxCharsRaw as number) : 8000;
+          const fullText = (outputText ?? "").trim();
+          if (fullText) {
+            body = fullText.length > maxChars ? `${fullText.slice(0, maxChars)}…` : fullText;
+          }
         }
-      }
 
-      const statusPrefix = status === "ok" ? prefix : `${prefix} (${status})`;
-      state.deps.enqueueSystemEvent(`${statusPrefix}: ${body}`, {
-        agentId: job.agentId,
-      });
-      if (job.wakeMode === "now") {
-        state.deps.requestHeartbeatNow({ reason: `cron:${job.id}:post` });
+        const statusPrefix = status === "ok" ? prefix : `${prefix} (${status})`;
+        state.deps.enqueueSystemEvent(`${statusPrefix}: ${body}`, {
+          agentId: job.agentId,
+        });
+        if (job.wakeMode === "now") {
+          state.deps.requestHeartbeatNow({ reason: `cron:${job.id}:post` });
+        }
       }
     }
   };
