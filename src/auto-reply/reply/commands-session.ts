@@ -6,6 +6,7 @@ import { logVerbose } from "../../globals.js";
 import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { scheduleGatewaySigusr1Restart, triggerOpenClawRestart } from "../../infra/restart.js";
 import { loadCostUsageSummary, loadSessionCostSummary } from "../../infra/session-cost-usage.js";
+import { defaultRuntime } from "../../runtime.js";
 import { formatTokenCount, formatUsd } from "../../utils/usage-format.js";
 import { parseActivationCommand } from "../group-activation.js";
 import { parseSendPolicyCommand } from "../send-policy.js";
@@ -312,23 +313,32 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
       `stop: cleared followups=${cleared.followupCleared} lane=${cleared.laneCleared} keys=${cleared.keys.join(",")}`,
     );
   }
+  let persistenceFailed = false;
   if (abortTarget.entry && params.sessionStore && abortTarget.key) {
+    const prevEntry = { ...abortTarget.entry };
     abortTarget.entry.abortedLastRun = true;
     abortTarget.entry.updatedAt = Date.now();
     params.sessionStore[abortTarget.key] = abortTarget.entry;
     if (params.storePath) {
-      await updateSessionStore(params.storePath, (store) => {
-        store[abortTarget.key] = abortTarget.entry;
-      });
+      try {
+        await updateSessionStore(params.storePath, (store) => {
+          store[abortTarget.key] = abortTarget.entry;
+        });
+      } catch (err) {
+        defaultRuntime.error(`Failed to persist session stop (${abortTarget.key}): ${String(err)}`);
+        // Revert in-memory change if persistence failed
+        params.sessionStore[abortTarget.key] = prevEntry;
+        persistenceFailed = true;
+      }
     }
   } else if (params.command.abortKey) {
     setAbortMemory(params.command.abortKey, true);
   }
 
-  // Trigger internal hook for stop command
+  // Trigger internal hook for stop command (only if persistence succeeded)
   const sessionKeyForHook = abortTarget.key ?? params.sessionKey;
   let hookMessages: string[] = [];
-  if (sessionKeyForHook) {
+  if (sessionKeyForHook && !persistenceFailed) {
     const entry = abortTarget.entry ?? params.sessionEntry;
     const hookEvent = createInternalHookEvent("command", "stop", sessionKeyForHook, {
       sessionEntry: entry ? { ...entry } : undefined,
