@@ -83,13 +83,19 @@ export type AppViewState = {
   configSaving: boolean;
   configApplying: boolean;
   updateRunning: boolean;
+  applySessionKey: string;
   configSnapshot: ConfigSnapshot | null;
-  configSchema: unknown;
+  configSchema: unknown | null;
+  configSchemaVersion: string | null;
   configSchemaLoading: boolean;
   configUiHints: Record<string, unknown>;
   configForm: Record<string, unknown> | null;
   configFormOriginal: Record<string, unknown> | null;
+  configFormDirty: boolean;
   configFormMode: "form" | "raw";
+  configSearchQuery: string;
+  configActiveSection: string | null;
+  configActiveSubsection: string | null;
   channelsLoading: boolean;
   channelsSnapshot: ChannelsStatusSnapshot | null;
   channelsError: string | null;
@@ -100,7 +106,6 @@ export type AppViewState = {
   whatsappBusy: boolean;
   nostrProfileFormState: NostrProfileFormState | null;
   nostrProfileAccountId: string | null;
-  configFormDirty: boolean;
   presenceLoading: boolean;
   presenceEntries: PresenceEntry[];
   presenceError: string | null;
