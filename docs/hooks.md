@@ -240,13 +240,13 @@ Triggered during session lifecycle when session persistence is enabled (requires
 
 **Context includes**:
 
-- `sessionId`: The session ID (for `session:start` and `session:end`)
+- `sessionId`: The session ID (new session ID for `session:reset`)
 - `oldSessionId` and `newSessionId`: (for `session:reset` only) The session transition
 
 **Lifecycle patterns**:
 
-- **User-initiated reset** (`/new` or `/reset`): `command:new` or `command:reset` → `session:start`
-- **Auto-recovery reset** (compaction failure, role-ordering conflict): `session:end` → `session:reset` → `session:start`
+- **User-initiated reset** (`/new` or `/reset`): `command:new` or `command:reset` fires immediately; `session:start` fires when the subsequent agent turn runs
+- **Auto-recovery reset** (compaction failure, role-ordering conflict): `session:end` → `session:reset` fire during reset; `session:start` fires when the next agent turn runs
 
 ### Agent Events
 

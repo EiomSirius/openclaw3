@@ -329,8 +329,9 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
   const sessionKeyForHook = abortTarget.key ?? params.sessionKey;
   let hookMessages: string[] = [];
   if (sessionKeyForHook) {
+    const entry = abortTarget.entry ?? params.sessionEntry;
     const hookEvent = createInternalHookEvent("command", "stop", sessionKeyForHook, {
-      sessionEntry: abortTarget.entry ?? params.sessionEntry,
+      sessionEntry: entry ? { ...entry } : undefined,
       sessionId: abortTarget.sessionId,
       commandSource: params.command.surface,
       senderId: params.command.senderId,

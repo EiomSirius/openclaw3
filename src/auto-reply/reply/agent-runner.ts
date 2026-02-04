@@ -312,6 +312,7 @@ export async function runReplyAgent(params: {
 
     // 2. Session Reset (Transition)
     const resetEvent = createInternalHookEvent("session", "reset", sessionKey, {
+      sessionId: nextSessionId,
       oldSessionId: prevSessionId,
       newSessionId: nextSessionId,
     });

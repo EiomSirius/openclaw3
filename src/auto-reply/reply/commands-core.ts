@@ -75,11 +75,13 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
   if (resetRequested && params.command.isAuthorizedSender) {
     const commandAction = resetMatch?.[1] ?? "new";
     const hookEvent = createInternalHookEvent("command", commandAction, params.sessionKey ?? "", {
-      sessionEntry: params.sessionEntry,
-      previousSessionEntry: params.previousSessionEntry,
+      sessionEntry: params.sessionEntry ? { ...params.sessionEntry } : undefined,
+      previousSessionEntry: params.previousSessionEntry
+        ? { ...params.previousSessionEntry }
+        : undefined,
       commandSource: params.command.surface,
       senderId: params.command.senderId,
-      cfg: params.cfg, // Pass config for LLM slug generation
+      cfg: params.cfg ? { ...params.cfg } : undefined, // Pass config for LLM slug generation
     });
     await triggerInternalHook(hookEvent);
 
