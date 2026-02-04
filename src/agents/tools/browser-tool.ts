@@ -499,7 +499,7 @@ export function createBrowserTool(opts?: {
                 profile,
               });
           if (snapshot.format === "ai" || snapshot.format === "enhanced" || snapshot.format === "hybrid") {
-            if (labels && snapshot.imagePath) {
+            if (labels && snapshot.format === "ai" && snapshot.imagePath) {
               return await imageResultFromFile({
                 label: "browser:snapshot",
                 path: snapshot.imagePath,

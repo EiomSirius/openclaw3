@@ -13,7 +13,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Page } from "playwright-core";
+import type { Page, Locator } from "playwright-core";
 import {
   buildRoleSnapshotFromAriaSnapshot,
   getRoleSnapshotStats,
@@ -36,7 +36,7 @@ function getPageScript(): string {
     const scriptPath = join(__dirname, "page-script-enhanced.js");
     pageScriptContent = readFileSync(scriptPath, "utf-8");
   }
-  return pageScriptContent;
+  return pageScriptContent!;
 }
 
 /**
@@ -159,7 +159,7 @@ async function ensureScriptInjected(page: Page): Promise<void> {
 export async function getInteractiveRegionsViaScript(opts: {
   cdpUrl: string;
   targetId?: string;
-  locator?: Awaited<ReturnType<typeof import("playwright-core").Page.locator>>;
+  locator?: Locator;
 }): Promise<Record<string, InteractiveRegion>> {
   const page = await getPageForTargetId(opts);
   ensurePageState(page);
@@ -168,13 +168,15 @@ export async function getInteractiveRegionsViaScript(opts: {
   // Evaluate script within locator context if provided, otherwise use document
   const result = opts.locator
     ? ((await opts.locator.evaluate(
-        (el) => {
-          return OpenClawEnhancedDetection.getInteractiveRects(el);
+        (el: Element) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return (window as any).OpenClawEnhancedDetection.getInteractiveRects(el);
         },
       )) as Record<string, unknown>)
     : ((await page.evaluate(
         () => {
-          return OpenClawEnhancedDetection.getInteractiveRects(document);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return (window as any).OpenClawEnhancedDetection.getInteractiveRects(document);
         },
       )) as Record<string, unknown>);
 
