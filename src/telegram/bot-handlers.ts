@@ -1,4 +1,4 @@
-import type { TelegramMessage } from "./bot/types.js";
+import type { TelegramForwardedMessage, TelegramMessage } from "./bot/types.js";
 import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 // @ts-nocheck
 import { hasControlCommand } from "../auto-reply/command-detection.js";
@@ -19,7 +19,11 @@ import { firstDefined, isSenderAllowed, normalizeAllowFromWithStore } from "./bo
 import { RegisterTelegramHandlerParams } from "./bot-native-commands.js";
 import { MEDIA_GROUP_TIMEOUT_MS, type MediaGroupEntry } from "./bot-updates.js";
 import { resolveMedia } from "./bot/delivery.js";
-import { resolveTelegramForumThreadId } from "./bot/helpers.js";
+import {
+  buildForwardPrefix,
+  normalizeForwardedContext,
+  resolveTelegramForumThreadId,
+} from "./bot/helpers.js";
 import { migrateTelegramGroupConfig } from "./group-migration.js";
 import { resolveTelegramInlineButtonsScope } from "./inline-buttons.js";
 import { buildInlineKeyboard } from "./send.js";
@@ -88,7 +92,15 @@ export const registerTelegramHandlers = ({
         return;
       }
       const combinedText = entries
-        .map((entry) => entry.msg.text ?? entry.msg.caption ?? "")
+        .map((entry) => {
+          const text = entry.msg.text ?? entry.msg.caption ?? "";
+          const fwd = normalizeForwardedContext(entry.msg);
+          if (fwd) {
+            const prefix = buildForwardPrefix(fwd).trimEnd();
+            return text ? `${prefix}\n${text}` : prefix;
+          }
+          return text;
+        })
         .filter(Boolean)
         .join("\n");
       if (!combinedText.trim()) {
@@ -98,8 +110,17 @@ export const registerTelegramHandlers = ({
       const baseCtx = first.ctx as { me?: unknown; getFile?: unknown } & Record<string, unknown>;
       const getFile =
         typeof baseCtx.getFile === "function" ? baseCtx.getFile.bind(baseCtx) : async () => ({});
+      const {
+        forward_origin: _forward_origin,
+        forward_from: _forward_from,
+        forward_from_chat: _forward_from_chat,
+        forward_sender_name: _forward_sender_name,
+        forward_date: _forward_date,
+        forward_signature: _forward_signature,
+        ...baseMsg
+      } = first.msg as TelegramForwardedMessage;
       const syntheticMessage: TelegramMessage = {
-        ...first.msg,
+        ...baseMsg,
         text: combinedText,
         caption: undefined,
         caption_entities: undefined,
