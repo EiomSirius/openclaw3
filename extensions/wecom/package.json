@@ -1,0 +1,39 @@
+{
+  "name": "@openclaw/wecom",
+  "version": "2026.2.2",
+  "description": "OpenClaw WeCom (Enterprise WeChat) channel plugin",
+  "type": "module",
+  "dependencies": {
+    "fast-xml-parser": "^4.2.0"
+  },
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "peerDependencies": {
+    "openclaw": "*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "channel": {
+      "id": "wecom",
+      "label": "WeCom",
+      "selectionLabel": "WeCom (Enterprise WeChat AI Bot)",
+      "docsPath": "/channels/wecom",
+      "docsLabel": "wecom",
+      "blurb": "Enterprise WeChat (WeCom) AI Bot with streaming support.",
+      "aliases": [
+        "wecom",
+        "wework",
+        "wxwork"
+      ],
+      "order": 85
+    },
+    "install": {
+      "npmSpec": "@openclaw/wecom",
+      "localPath": "extensions/wecom",
+      "defaultChoice": "npm"
+    }
+  }
+}

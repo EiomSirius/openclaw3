@@ -6,7 +6,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
-- TBD.
+- WeCom: add WeCom (Enterprise WeChat) channel plugin with streaming support, dynamic agent management, and command whitelist. Thanks @sunnoy.
 
 ### Fixes
 
