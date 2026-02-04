@@ -277,6 +277,9 @@ export async function runReplyAgent(params: {
       defaultRuntime.error(
         `Failed to persist session reset after ${failureLabel} (${sessionKey}): ${String(err)}`,
       );
+      // Revert in-memory change if persistence failed
+      activeSessionStore[sessionKey] = prevEntry;
+      return { success: false, hookMessages: [] };
     }
     followupRun.run.sessionId = nextSessionId;
     followupRun.run.sessionFile = nextSessionFile;
