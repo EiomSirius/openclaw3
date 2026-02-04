@@ -198,6 +198,11 @@ export async function executeJob(
         }
       } else {
         // wakeMode is "next-heartbeat" or runHeartbeatOnce not available
+        // NOTE: This marks the job as "ok" immediately, but the system event
+        // won't be processed until the next heartbeat occurs. If there's no
+        // activity to trigger a heartbeat, the message may sit in queue
+        // indefinitely. For reliable message delivery, use sessionTarget="isolated"
+        // with payload.kind="agentTurn" and deliver=true instead.
         state.deps.requestHeartbeatNow({ reason: `cron:${job.id}` });
         await finish("ok", undefined, text);
       }

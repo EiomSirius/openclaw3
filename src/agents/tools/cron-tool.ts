@@ -175,6 +175,8 @@ JOB SCHEMA (for add action):
   "schedule": { ... },      // Required: when to run
   "payload": { ... },       // Required: what to execute
   "sessionTarget": "main" | "isolated",  // Required
+  "wakeMode": "now" | "next-heartbeat",  // Required
+  "deleteAfterRun": true | false,        // Optional
   "enabled": true | false   // Optional, default true
 }
 
@@ -196,9 +198,23 @@ CRITICAL CONSTRAINTS:
 - sessionTarget="main" REQUIRES payload.kind="systemEvent"
 - sessionTarget="isolated" REQUIRES payload.kind="agentTurn"
 
-WAKE MODES (for wake action):
-- "next-heartbeat" (default): Wake on next heartbeat
-- "now": Wake immediately
+RECOMMENDED PATTERN FOR REMINDERS (ensures reliable delivery):
+For one-time reminders that deliver messages to users, use this proven configuration:
+{
+  "sessionTarget": "isolated",
+  "wakeMode": "now",
+  "deleteAfterRun": true,
+  "payload": {
+    "kind": "agentTurn",
+    "deliver": true,
+    "message": "<your reminder text>"
+  }
+}
+This pattern ensures the reminder executes immediately, delivers reliably via auto-routing, and cleans up after completion.
+
+WAKE MODES:
+- "now": Execute immediately (recommended for reminders)
+- "next-heartbeat": Wait for next natural heartbeat (may delay indefinitely if no activity)
 
 Use jobId as the canonical identifier; id is accepted for compatibility. Use contextMessages (0-10) to add previous messages as context to the job text.`,
     parameters: CronToolSchema,
