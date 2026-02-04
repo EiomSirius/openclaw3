@@ -125,7 +125,10 @@ describe("browser tool snapshot maxChars", () => {
     const tool = createBrowserTool();
     await tool.execute?.(null, { action: "profiles" });
 
-    expect(browserClientMocks.browserProfiles).toHaveBeenCalledWith(undefined);
+    expect(browserClientMocks.browserProfiles).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ authToken: undefined }),
+    );
   });
 
   it("passes refs mode through to browser snapshot", async () => {
