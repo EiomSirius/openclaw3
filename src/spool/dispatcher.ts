@@ -57,9 +57,9 @@ export async function dispatchSpoolEvent(
 ): Promise<SpoolDispatchResult> {
   const { cfg, deps, event } = params;
 
-  // Check expiration
+  // Check expiration - move to dead-letter for audit trail
   if (isEventExpired(event)) {
-    await deleteSpoolEvent(event.id);
+    await moveToDeadLetter(event.id, event, "expired", "event expired");
     return {
       status: "expired",
       eventId: event.id,

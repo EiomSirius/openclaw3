@@ -79,6 +79,9 @@ export function createSpoolWatcher(params: SpoolWatcherParams): SpoolWatcher {
         return;
       }
 
+      // Load config once for all events in this batch
+      const cfg = loadConfig();
+
       // Get all events sorted by priority (critical > high > normal > low) then createdAt
       // This ensures proper processing order when multiple events are pending
       const sortedEvents = await listSpoolEvents();
@@ -100,7 +103,6 @@ export function createSpoolWatcher(params: SpoolWatcherParams): SpoolWatcher {
         const filePath = path.join(eventsDir, `${event.id}.json`);
 
         try {
-          const cfg = loadConfig();
           const result = await dispatchSpoolEventFile({
             cfg,
             deps,
@@ -139,7 +141,6 @@ export function createSpoolWatcher(params: SpoolWatcherParams): SpoolWatcher {
         const filePath = path.join(eventsDir, `${eventId}.json`);
 
         try {
-          const cfg = loadConfig();
           const result = await dispatchSpoolEventFile({
             cfg,
             deps,

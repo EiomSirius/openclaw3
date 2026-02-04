@@ -17,7 +17,7 @@ export function registerSpoolEnqueueCommand(spool: Command) {
     .option("--agent <id>", "Agent ID (optional)")
     .option("--session <key>", "Session key override (optional)")
     .option("--model <model>", "Model override (provider/model or alias)")
-    .option("--thinking <level>", "Thinking level (off|minimal|low|medium|high)")
+    .option("--thinking <level>", "Thinking level (off|minimal|low|medium|high|xhigh)")
     .option("--priority <level>", "Priority (low|normal|high|critical)", "normal")
     .option("--max-retries <n>", "Maximum retry attempts (default: from config or 3)")
     .option("--expires-in <duration>", "Expiration duration (e.g., 1h, 30m)")
