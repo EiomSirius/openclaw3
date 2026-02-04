@@ -13,8 +13,13 @@ export function registerMessageThreadCommands(message: Command, helpers: Message
           .requiredOption("--thread-name <name>", "Thread name"),
       ),
     )
-    .option("--message-id <id>", "Message id (optional)")
-    .option("--auto-archive-min <n>", "Thread auto-archive minutes")
+    .option("--message-id <id>", "Message id (optional, Discord only)")
+    .option("--auto-archive-min <n>", "Thread auto-archive minutes (Discord only)")
+    .option(
+      "--icon-color <color>",
+      "Topic icon color: blue/yellow/purple/green/pink/red (Telegram only)",
+    )
+    .option("--icon-emoji <id>", "Custom emoji ID for topic icon (Telegram Premium only)")
     .action(async (opts) => {
       await helpers.runMessageAction("thread-create", opts);
     });

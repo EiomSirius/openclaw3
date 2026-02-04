@@ -18,6 +18,8 @@ export type TelegramActionConfig = {
   editMessage?: boolean;
   /** Enable sticker actions (send and search). */
   sticker?: boolean;
+  /** Enable forum topic creation (thread-create action). Bot must be admin in a forum-enabled supergroup. */
+  createForumTopic?: boolean;
 };
 
 export type TelegramNetworkConfig = {

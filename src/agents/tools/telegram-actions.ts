@@ -6,6 +6,7 @@ import {
 } from "../../telegram/inline-buttons.js";
 import { resolveTelegramReactionLevel } from "../../telegram/reaction-level.js";
 import {
+  createForumTopicTelegram,
   deleteMessageTelegram,
   editMessageTelegram,
   reactMessageTelegram,
@@ -318,6 +319,45 @@ export async function handleTelegramAction(
   if (action === "stickerCacheStats") {
     const stats = getCacheStats();
     return jsonResult({ ok: true, ...stats });
+  }
+
+  if (action === "createForumTopic") {
+    if (!isActionEnabled("createForumTopic", false)) {
+      throw new Error(
+        "Telegram createForumTopic is disabled. Set channels.telegram.actions.createForumTopic to true.",
+      );
+    }
+    const chatId = readStringOrNumberParam(params, "chatId", { required: true });
+    const name = readStringParam(params, "name", { required: true });
+    if (name.length === 0) {
+      throw new Error("Forum topic name is required.");
+    }
+    if (name.length > 128) {
+      throw new Error("Forum topic name must be 128 characters or less.");
+    }
+    // Accept color name (blue/yellow/purple/green/pink/red) or decimal value
+    const iconColor =
+      readStringParam(params, "iconColor") ??
+      readNumberParam(params, "iconColor", { integer: true });
+    const iconCustomEmojiId = readStringParam(params, "iconCustomEmojiId");
+    const token = resolveTelegramToken(cfg, { accountId }).token;
+    if (!token) {
+      throw new Error(
+        "Telegram bot token missing. Set TELEGRAM_BOT_TOKEN or channels.telegram.botToken.",
+      );
+    }
+    const result = await createForumTopicTelegram(chatId ?? "", name, {
+      token,
+      iconColor: iconColor ?? undefined,
+      iconCustomEmojiId: iconCustomEmojiId ?? undefined,
+    });
+    return jsonResult({
+      ok: true,
+      threadId: result.message_thread_id,
+      name: result.name,
+      iconColor: result.icon_color,
+      iconCustomEmojiId: result.icon_custom_emoji_id,
+    });
   }
 
   throw new Error(`Unsupported Telegram action: ${action}`);

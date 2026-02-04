@@ -752,3 +752,87 @@ export async function sendStickerTelegram(
 
   return { messageId, chatId: resolvedChatId };
 }
+
+// ----- Forum Topic Creation -----
+
+/** Valid Telegram topic icon colors (decimal values) */
+export const TELEGRAM_TOPIC_COLORS = {
+  blue: 7322096,
+  yellow: 16766590,
+  purple: 13338331,
+  green: 9367192,
+  pink: 16749490,
+  red: 16478047,
+} as const;
+
+export type TelegramTopicColorName = keyof typeof TELEGRAM_TOPIC_COLORS;
+type TelegramTopicColorValue = (typeof TELEGRAM_TOPIC_COLORS)[TelegramTopicColorName];
+
+/** Resolve color name or number to Telegram's expected value */
+export function resolveTelegramTopicColor(
+  color: string | number | undefined,
+): TelegramTopicColorValue | undefined {
+  if (color === undefined) return undefined;
+  if (typeof color === "number") return color as TelegramTopicColorValue;
+  return TELEGRAM_TOPIC_COLORS[color.toLowerCase() as TelegramTopicColorName];
+}
+
+export interface CreateForumTopicOptions {
+  token?: string;
+  accountId?: string;
+  /** Icon color: name (blue/yellow/purple/green/pink/red) or decimal value */
+  iconColor?: string | number;
+  /** Custom emoji ID (requires Telegram Premium on bot) */
+  iconCustomEmojiId?: string;
+  /** Optional pre-configured Bot API instance */
+  api?: Bot["api"];
+}
+
+export interface ForumTopicResult {
+  message_thread_id: number;
+  name: string;
+  icon_color?: number;
+  icon_custom_emoji_id?: string;
+}
+
+/**
+ * Create a forum topic in a Telegram supergroup with forum mode enabled.
+ * @param chatId - Chat ID of the forum-enabled supergroup
+ * @param name - Topic name (1-128 characters)
+ * @param opts - Optional configuration
+ */
+export async function createForumTopicTelegram(
+  chatId: string | number,
+  name: string,
+  opts: CreateForumTopicOptions = {},
+): Promise<ForumTopicResult> {
+  const cfg = loadConfig();
+  const account = resolveTelegramAccount({ cfg, accountId: opts.accountId });
+  const token = resolveToken(opts.token, account);
+  const normalizedChatId = normalizeChatId(String(chatId));
+  const client = resolveTelegramClientOptions(account);
+  const api = opts.api ?? new Bot(token, client ? { client } : undefined).api;
+
+  const iconColor = resolveTelegramTopicColor(opts.iconColor);
+
+  const result = await api.createForumTopic(
+    normalizedChatId,
+    name,
+    iconColor !== undefined || opts.iconCustomEmojiId
+      ? { icon_color: iconColor, icon_custom_emoji_id: opts.iconCustomEmojiId }
+      : undefined,
+  );
+
+  recordChannelActivity({
+    channel: "telegram",
+    accountId: account.accountId,
+    direction: "outbound",
+  });
+
+  return {
+    message_thread_id: result.message_thread_id,
+    name: result.name,
+    icon_color: result.icon_color,
+    icon_custom_emoji_id: result.icon_custom_emoji_id,
+  };
+}

@@ -140,4 +140,46 @@ describe("telegramMessageActions", () => {
     expect(String(call.messageId)).toBe("456");
     expect(call.emoji).toBe("ok");
   });
+
+  it("excludes thread-create when createForumTopic not enabled", () => {
+    const cfg = { channels: { telegram: { botToken: "tok" } } } as OpenClawConfig;
+    const actions = telegramMessageActions.listActions({ cfg });
+    expect(actions).not.toContain("thread-create");
+  });
+
+  it("includes thread-create when createForumTopic enabled", () => {
+    const cfg = {
+      channels: { telegram: { botToken: "tok", actions: { createForumTopic: true } } },
+    } as OpenClawConfig;
+    const actions = telegramMessageActions.listActions({ cfg });
+    expect(actions).toContain("thread-create");
+  });
+
+  it("maps thread-create params with color name", async () => {
+    handleTelegramAction.mockClear();
+    const cfg = {
+      channels: { telegram: { botToken: "tok", actions: { createForumTopic: true } } },
+    } as OpenClawConfig;
+
+    await telegramMessageActions.handleAction({
+      action: "thread-create",
+      params: {
+        to: "-100123",
+        threadName: "Test Topic",
+        iconColor: "yellow",
+      },
+      cfg,
+      accountId: undefined,
+    });
+
+    expect(handleTelegramAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "createForumTopic",
+        chatId: "-100123",
+        name: "Test Topic",
+        iconColor: "yellow",
+      }),
+      cfg,
+    );
+  });
 });
