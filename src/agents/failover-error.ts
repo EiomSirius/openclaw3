@@ -50,6 +50,8 @@ export function resolveFailoverStatus(reason: FailoverReason): number | undefine
       return 408;
     case "format":
       return 400;
+    case "server_error":
+      return 500;
     default:
       return undefined;
   }
@@ -142,6 +144,15 @@ export function isTimeoutError(err: unknown): boolean {
   return hasTimeoutHint(cause) || hasTimeoutHint(reason);
 }
 
+/**
+ * HTTP 5xx status codes that should trigger failover to backup models.
+ * - 500: Internal Server Error (generic server failure)
+ * - 502: Bad Gateway (upstream server error)
+ * - 503: Service Unavailable (server overloaded or down)
+ * - 529: Site Overloaded (Cloudflare/custom rate limiting)
+ */
+const FAILOVER_WORTHY_5XX_CODES = new Set([500, 502, 503, 504, 529]);
+
 export function resolveFailoverReasonFromError(err: unknown): FailoverReason | null {
   if (isFailoverError(err)) {
     return err.reason;
@@ -159,6 +170,11 @@ export function resolveFailoverReasonFromError(err: unknown): FailoverReason | n
   }
   if (status === 408) {
     return "timeout";
+  }
+  // Handle server errors (5xx) as failover-worthy
+  // These are typically transient issues with LLM providers
+  if (status !== undefined && FAILOVER_WORTHY_5XX_CODES.has(status)) {
+    return "server_error";
   }
 
   const code = (getErrorCode(err) ?? "").toUpperCase();

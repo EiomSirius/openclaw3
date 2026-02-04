@@ -79,6 +79,106 @@ describe("runWithModelFallback", () => {
     expect(run.mock.calls[1]?.[1]).toBe("claude-haiku-3-5");
   });
 
+  it("falls back on HTTP 500 internal server error", async () => {
+    const cfg = makeCfg();
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("Internal Server Error"), { status: 500 }))
+      .mockResolvedValueOnce("ok");
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(result.attempts[0]?.reason).toBe("server_error");
+    expect(run.mock.calls[1]?.[0]).toBe("anthropic");
+    expect(run.mock.calls[1]?.[1]).toBe("claude-haiku-3-5");
+  });
+
+  it("falls back on HTTP 502 bad gateway", async () => {
+    const cfg = makeCfg();
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("Bad Gateway"), { status: 502 }))
+      .mockResolvedValueOnce("ok");
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(result.attempts[0]?.reason).toBe("server_error");
+  });
+
+  it("falls back on HTTP 503 service unavailable", async () => {
+    const cfg = makeCfg();
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("Service Unavailable"), { status: 503 }))
+      .mockResolvedValueOnce("ok");
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "anthropic",
+      model: "claude-sonnet-4",
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(result.attempts[0]?.reason).toBe("server_error");
+  });
+
+  it("falls back on HTTP 504 gateway timeout", async () => {
+    const cfg = makeCfg();
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("Gateway Timeout"), { status: 504 }))
+      .mockResolvedValueOnce("ok");
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "anthropic",
+      model: "claude-sonnet-4",
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(result.attempts[0]?.reason).toBe("server_error");
+  });
+
+  it("falls back on HTTP 529 site overloaded (Anthropic)", async () => {
+    const cfg = makeCfg();
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(
+        Object.assign(new Error("API is temporarily overloaded"), { status: 529 }),
+      )
+      .mockResolvedValueOnce("ok");
+
+    const result = await runWithModelFallback({
+      cfg,
+      provider: "anthropic",
+      model: "claude-opus-4",
+      run,
+    });
+
+    expect(result.result).toBe("ok");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(result.attempts[0]?.reason).toBe("server_error");
+    expect(result.attempts[0]?.status).toBe(529);
+  });
+
   it("falls back on billing errors", async () => {
     const cfg = makeCfg();
     const run = vi

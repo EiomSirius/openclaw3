@@ -13,6 +13,19 @@ describe("failover-error", () => {
     expect(resolveFailoverReasonFromError({ status: 408 })).toBe("timeout");
   });
 
+  it("infers server_error from HTTP 5xx status codes", () => {
+    expect(resolveFailoverReasonFromError({ status: 500 })).toBe("server_error");
+    expect(resolveFailoverReasonFromError({ status: 502 })).toBe("server_error");
+    expect(resolveFailoverReasonFromError({ status: 503 })).toBe("server_error");
+    expect(resolveFailoverReasonFromError({ status: 529 })).toBe("server_error");
+  });
+
+  it("does not treat other 5xx codes as failover-worthy", () => {
+    // 504 Gateway Timeout - common during provider outages
+    expect(resolveFailoverReasonFromError({ status: 504 })).toBe("server_error");
+    expect(resolveFailoverReasonFromError({ status: 501 })).toBe(null);
+  });
+
   it("infers format errors from error messages", () => {
     expect(
       resolveFailoverReasonFromError({
@@ -45,6 +58,36 @@ describe("failover-error", () => {
     });
     expect(err?.reason).toBe("format");
     expect(err?.status).toBe(400);
+  });
+
+  it("coerces HTTP 5xx errors into FailoverError with server_error reason", () => {
+    const err = coerceToFailoverError(
+      Object.assign(new Error("Internal Server Error"), { status: 500 }),
+      { provider: "openai", model: "gpt-4" },
+    );
+    expect(err?.name).toBe("FailoverError");
+    expect(err?.reason).toBe("server_error");
+    expect(err?.status).toBe(500);
+    expect(err?.provider).toBe("openai");
+    expect(err?.model).toBe("gpt-4");
+  });
+
+  it("coerces HTTP 503 service unavailable errors", () => {
+    const err = coerceToFailoverError(
+      Object.assign(new Error("Service Unavailable"), { status: 503 }),
+      { provider: "anthropic", model: "claude-sonnet-4" },
+    );
+    expect(err?.reason).toBe("server_error");
+    expect(err?.status).toBe(503);
+  });
+
+  it("coerces HTTP 529 overloaded errors", () => {
+    const err = coerceToFailoverError(
+      Object.assign(new Error("Site Overloaded"), { status: 529 }),
+      { provider: "anthropic", model: "claude-opus-4" },
+    );
+    expect(err?.reason).toBe("server_error");
+    expect(err?.status).toBe(529);
   });
 
   it("describes non-Error values consistently", () => {
