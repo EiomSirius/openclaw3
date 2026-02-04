@@ -39,6 +39,20 @@ export function stop(state: CronServiceState) {
 }
 
 export async function status(state: CronServiceState) {
+  // Fast path: if the store is already loaded, avoid waiting behind long-running
+  // cron executions that may hold the cron lock (e.g., isolated agent jobs).
+  // This keeps `cron.status` responsive.
+  if (state.store) {
+    // Best-effort snapshot: avoid throwing if the store is being mutated under the lock.
+    const jobsCount = Array.isArray(state.store.jobs) ? state.store.jobs.length : 0;
+    return {
+      enabled: state.deps.cronEnabled,
+      storePath: state.deps.storePath,
+      jobs: jobsCount,
+      nextWakeAtMs: state.deps.cronEnabled ? (nextWakeAtMs(state) ?? null) : null,
+    };
+  }
+
   return await locked(state, async () => {
     await ensureLoaded(state);
     return {
@@ -51,11 +65,26 @@ export async function status(state: CronServiceState) {
 }
 
 export async function list(state: CronServiceState, opts?: { includeDisabled?: boolean }) {
+  const includeDisabled = opts?.includeDisabled === true;
+
+  const nextAt = (j: { state?: { nextRunAtMs?: number } } | undefined) =>
+    j?.state?.nextRunAtMs ?? 0;
+
+  // Fast path: if the store is already loaded, avoid waiting behind long-running
+  // cron executions that may hold the cron lock (e.g., isolated agent jobs).
+  // This keeps `cron.list` responsive.
+  if (state.store) {
+    // Best-effort snapshot: clone the array so we don't iterate/sort while the lock holder
+    // is mutating job scheduling fields.
+    const snapshot = Array.isArray(state.store.jobs) ? state.store.jobs.slice() : [];
+    const jobs = snapshot.filter((j) => includeDisabled || j.enabled);
+    return jobs.toSorted((a, b) => nextAt(a) - nextAt(b));
+  }
+
   return await locked(state, async () => {
     await ensureLoaded(state);
-    const includeDisabled = opts?.includeDisabled === true;
     const jobs = (state.store?.jobs ?? []).filter((j) => includeDisabled || j.enabled);
-    return jobs.toSorted((a, b) => (a.state.nextRunAtMs ?? 0) - (b.state.nextRunAtMs ?? 0));
+    return jobs.toSorted((a, b) => nextAt(a) - nextAt(b));
   });
 }
 
