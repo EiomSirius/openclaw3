@@ -246,6 +246,7 @@ export function buildSystemPrompt(params: {
     contextFiles: params.contextFiles,
     ttsHint,
     memoryCitationsMode: params.config?.memory?.citations,
+    secureCodingGuidelines: params.config?.agents?.defaults?.secureCodingGuidelines,
   });
 }
 
