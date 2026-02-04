@@ -5,6 +5,13 @@ vi.mock("../gateway/call.js", () => ({
   callGateway: (opts: unknown) => callGatewayMock(opts),
 }));
 
+const runAgentStepMock = vi.fn(async () => "announce summary");
+const readLatestAssistantReplyMock = vi.fn(async () => "raw subagent reply");
+vi.mock("./tools/agent-step.js", () => ({
+  readLatestAssistantReply: (...args: unknown[]) => readLatestAssistantReplyMock(...args),
+  runAgentStep: (...args: unknown[]) => runAgentStepMock(...args),
+}));
+
 let configOverride: ReturnType<(typeof import("../config/config.js"))["loadConfig"]> = {
   session: {
     mainKey: "main",
@@ -29,6 +36,8 @@ import { resetSubagentRegistryForTests } from "./subagent-registry.js";
 
 describe("openclaw-tools: subagents", () => {
   beforeEach(() => {
+    runAgentStepMock.mockReset().mockResolvedValue("announce summary");
+    readLatestAssistantReplyMock.mockReset().mockResolvedValue("raw subagent reply");
     configOverride = {
       session: {
         mainKey: "main",
@@ -220,7 +229,7 @@ describe("openclaw-tools: subagents", () => {
     expect(childWait?.timeoutMs).toBe(1000);
 
     const agentCalls = calls.filter((call) => call.method === "agent");
-    expect(agentCalls).toHaveLength(2);
+    expect(agentCalls).toHaveLength(1);
 
     const first = agentCalls[0]?.params as
       | {
@@ -236,19 +245,13 @@ describe("openclaw-tools: subagents", () => {
     expect(first?.sessionKey?.startsWith("agent:main:subagent:")).toBe(true);
     expect(childSessionKey?.startsWith("agent:main:subagent:")).toBe(true);
 
-    const second = agentCalls[1]?.params as
-      | {
-          sessionKey?: string;
-          message?: string;
-          deliver?: boolean;
-        }
+    const stepCall = runAgentStepMock.mock.calls[0]?.[0] as
+      | { extraSystemPrompt?: string }
       | undefined;
-    expect(second?.sessionKey).toBe("discord:group:req");
-    expect(second?.deliver).toBe(true);
-    expect(second?.message).toContain("background task");
+    expect(stepCall?.extraSystemPrompt).toContain("background task");
 
-    const sendCalls = calls.filter((c) => c.method === "send");
-    expect(sendCalls.length).toBe(0);
+    const deliveryCalls = calls.filter((c) => c.method === "send" || c.method === "chat.inject");
+    expect(deliveryCalls.length).toBe(1);
 
     expect(deletedKey?.startsWith("agent:main:subagent:")).toBe(true);
   });
@@ -295,6 +298,7 @@ describe("openclaw-tools: subagents", () => {
       agentSessionKey: "main",
       agentChannel: "whatsapp",
       agentAccountId: "kev",
+      agentTo: "+1555",
     }).find((candidate) => candidate.name === "sessions_spawn");
     if (!tool) {
       throw new Error("missing sessions_spawn tool");
@@ -328,12 +332,15 @@ describe("openclaw-tools: subagents", () => {
     await sleep(0);
 
     const agentCalls = calls.filter((call) => call.method === "agent");
-    expect(agentCalls).toHaveLength(2);
-    const announceParams = agentCalls[1]?.params as
-      | { accountId?: string; channel?: string; deliver?: boolean }
+    expect(agentCalls).toHaveLength(1);
+
+    const sendCalls = calls.filter((call) => call.method === "send");
+    expect(sendCalls).toHaveLength(1);
+    const announceParams = sendCalls[0]?.params as
+      | { accountId?: string; channel?: string; to?: string }
       | undefined;
-    expect(announceParams?.deliver).toBe(true);
     expect(announceParams?.channel).toBe("whatsapp");
     expect(announceParams?.accountId).toBe("kev");
+    expect(announceParams?.to).toBe("+1555");
   });
 });

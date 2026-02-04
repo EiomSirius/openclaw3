@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const callGatewayMock = vi.fn();
+const runAgentStepMock = vi.fn(async () => "announce summary");
+const readLatestAssistantReplyMock = vi.fn(async () => "raw subagent reply");
 vi.mock("../gateway/call.js", () => ({
   callGateway: (opts: unknown) => callGatewayMock(opts),
+}));
+vi.mock("./tools/agent-step.js", () => ({
+  readLatestAssistantReply: (...args: unknown[]) => readLatestAssistantReplyMock(...args),
+  runAgentStep: (...args: unknown[]) => runAgentStepMock(...args),
 }));
 
 let configOverride: ReturnType<(typeof import("../config/config.js"))["loadConfig"]> = {
@@ -28,6 +34,8 @@ import { resetSubagentRegistryForTests } from "./subagent-registry.js";
 
 describe("openclaw-tools: subagents", () => {
   beforeEach(() => {
+    runAgentStepMock.mockReset().mockResolvedValue("announce summary");
+    readLatestAssistantReplyMock.mockReset().mockResolvedValue("raw subagent reply");
     configOverride = {
       session: {
         mainKey: "main",
@@ -87,6 +95,9 @@ describe("openclaw-tools: subagents", () => {
         deletedKey = params?.key;
         return { ok: true };
       }
+      if (request.method === "chat.inject" || request.method === "send") {
+        return {};
+      }
       return {};
     });
 
@@ -116,22 +127,21 @@ describe("openclaw-tools: subagents", () => {
     expect(childWait?.timeoutMs).toBe(1000);
     expect(childSessionKey?.startsWith("agent:main:subagent:")).toBe(true);
 
-    // Two agent calls: subagent spawn + main agent trigger
+    // One agent call: subagent spawn (announce summary handled via runAgentStep + delivery)
     const agentCalls = calls.filter((call) => call.method === "agent");
-    expect(agentCalls).toHaveLength(2);
+    expect(agentCalls).toHaveLength(1);
 
     // First call: subagent spawn
     const first = agentCalls[0]?.params as { lane?: string } | undefined;
     expect(first?.lane).toBe("subagent");
 
-    // Second call: main agent trigger
-    const second = agentCalls[1]?.params as { sessionKey?: string; deliver?: boolean } | undefined;
-    expect(second?.sessionKey).toBe("discord:group:req");
-    expect(second?.deliver).toBe(true);
+    const stepCall = runAgentStepMock.mock.calls[0]?.[0] as
+      | { extraSystemPrompt?: string }
+      | undefined;
+    expect(stepCall?.extraSystemPrompt).toContain("background task");
 
-    // No direct send to external channel (main agent handles delivery)
-    const sendCalls = calls.filter((c) => c.method === "send");
-    expect(sendCalls.length).toBe(0);
+    const deliveryCalls = calls.filter((c) => c.method === "send" || c.method === "chat.inject");
+    expect(deliveryCalls.length).toBe(1);
 
     // Session should be deleted
     expect(deletedKey?.startsWith("agent:main:subagent:")).toBe(true);

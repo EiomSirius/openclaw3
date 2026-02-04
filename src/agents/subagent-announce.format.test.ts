@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const agentSpy = vi.fn(async () => ({ runId: "run-main", status: "ok" }));
+const callGatewayMock = vi.fn();
+const runAgentStepSpy = vi.fn(async () => "announce summary");
 const embeddedRunMock = {
   isEmbeddedPiRunActive: vi.fn(() => false),
   isEmbeddedPiRunStreaming: vi.fn(() => false),
@@ -16,26 +17,12 @@ let configOverride: ReturnType<(typeof import("../config/config.js"))["loadConfi
 };
 
 vi.mock("../gateway/call.js", () => ({
-  callGateway: vi.fn(async (req: unknown) => {
-    const typed = req as { method?: string; params?: { message?: string; sessionKey?: string } };
-    if (typed.method === "agent") {
-      return await agentSpy(typed);
-    }
-    if (typed.method === "agent.wait") {
-      return { status: "error", startedAt: 10, endedAt: 20, error: "boom" };
-    }
-    if (typed.method === "sessions.patch") {
-      return {};
-    }
-    if (typed.method === "sessions.delete") {
-      return {};
-    }
-    return {};
-  }),
+  callGateway: (req: unknown) => callGatewayMock(req),
 }));
 
 vi.mock("./tools/agent-step.js", () => ({
   readLatestAssistantReply: vi.fn(async () => "raw subagent reply"),
+  runAgentStep: (params: unknown) => runAgentStepSpy(params),
 }));
 
 vi.mock("../config/sessions.js", () => ({
@@ -59,7 +46,21 @@ vi.mock("../config/config.js", async (importOriginal) => {
 
 describe("subagent announce formatting", () => {
   beforeEach(() => {
-    agentSpy.mockClear();
+    callGatewayMock.mockReset();
+    callGatewayMock.mockImplementation(async (req: unknown) => {
+      const typed = req as { method?: string };
+      if (typed.method === "agent.wait") {
+        return { status: "error", startedAt: 10, endedAt: 20, error: "boom" };
+      }
+      if (typed.method === "sessions.patch" || typed.method === "sessions.delete") {
+        return {};
+      }
+      if (typed.method === "chat.inject" || typed.method === "send") {
+        return {};
+      }
+      return {};
+    });
+    runAgentStepSpy.mockReset().mockResolvedValue("announce summary");
     embeddedRunMock.isEmbeddedPiRunActive.mockReset().mockReturnValue(false);
     embeddedRunMock.isEmbeddedPiRunStreaming.mockReset().mockReturnValue(false);
     embeddedRunMock.queueEmbeddedPiMessage.mockReset().mockReturnValue(false);
@@ -88,18 +89,27 @@ describe("subagent announce formatting", () => {
       endedAt: 20,
     });
 
-    expect(agentSpy).toHaveBeenCalled();
-    const call = agentSpy.mock.calls[0]?.[0] as {
-      params?: { message?: string; sessionKey?: string };
+    expect(runAgentStepSpy).toHaveBeenCalled();
+    const call = runAgentStepSpy.mock.calls[0]?.[0] as {
+      sessionKey?: string;
+      message?: string;
+      extraSystemPrompt?: string;
     };
-    const msg = call?.params?.message as string;
-    expect(call?.params?.sessionKey).toBe("agent:main:main");
-    expect(msg).toContain("background task");
-    expect(msg).toContain("failed");
-    expect(msg).toContain("boom");
-    expect(msg).toContain("Findings:");
-    expect(msg).toContain("raw subagent reply");
-    expect(msg).toContain("Stats:");
+    const prompt = call?.extraSystemPrompt ?? "";
+    expect(call?.message).toBe("Subagent announce step.");
+    expect(call?.sessionKey).toContain("agent:main:announce:");
+    expect(prompt).toContain("background task");
+    expect(prompt).toContain("failed");
+    expect(prompt).toContain("boom");
+    expect(prompt).toContain("Findings:");
+    expect(prompt).toContain("raw subagent reply");
+    expect(prompt).toContain("Stats:");
+
+    const injectCall = callGatewayMock.mock.calls.find(
+      (entry) => (entry?.[0] as { method?: string })?.method === "chat.inject",
+    );
+    const injectParams = injectCall?.[0] as { params?: { message?: string } } | undefined;
+    expect(injectParams?.params?.message).toBe("announce summary");
   });
 
   it("includes success status when outcome is ok", async () => {
@@ -119,8 +129,8 @@ describe("subagent announce formatting", () => {
       outcome: { status: "ok" },
     });
 
-    const call = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
-    const msg = call?.params?.message as string;
+    const call = runAgentStepSpy.mock.calls[0]?.[0] as { extraSystemPrompt?: string };
+    const msg = call?.extraSystemPrompt ?? "";
     expect(msg).toContain("completed successfully");
   });
 
@@ -153,11 +163,18 @@ describe("subagent announce formatting", () => {
     });
 
     expect(didAnnounce).toBe(true);
-    expect(embeddedRunMock.queueEmbeddedPiMessage).toHaveBeenCalledWith(
-      "session-123",
-      expect.stringContaining("background task"),
+    expect(embeddedRunMock.queueEmbeddedPiMessage).not.toHaveBeenCalled();
+    await expect.poll(() => runAgentStepSpy.mock.calls.length).toBe(1);
+    const sendCall = callGatewayMock.mock.calls.find(
+      (entry) => (entry?.[0] as { method?: string })?.method === "send",
     );
-    expect(agentSpy).not.toHaveBeenCalled();
+    const sendParams = sendCall?.[0] as
+      | {
+          params?: { channel?: string; to?: string };
+        }
+      | undefined;
+    expect(sendParams?.params?.channel).toBe("whatsapp");
+    expect(sendParams?.params?.to).toBe("+1555");
   });
 
   it("queues announce delivery with origin account routing", async () => {
@@ -190,12 +207,21 @@ describe("subagent announce formatting", () => {
     });
 
     expect(didAnnounce).toBe(true);
-    await expect.poll(() => agentSpy.mock.calls.length).toBe(1);
+    await expect
+      .poll(() =>
+        callGatewayMock.mock.calls.some(
+          (entry) => (entry?.[0] as { method?: string })?.method === "send",
+        ),
+      )
+      .toBe(true);
 
-    const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
-    expect(call?.params?.channel).toBe("whatsapp");
-    expect(call?.params?.to).toBe("+1555");
-    expect(call?.params?.accountId).toBe("kev");
+    const call = callGatewayMock.mock.calls.find(
+      (entry) => (entry?.[0] as { method?: string })?.method === "send",
+    );
+    const params = call?.[0] as { params?: Record<string, unknown> } | undefined;
+    expect(params?.params?.channel).toBe("whatsapp");
+    expect(params?.params?.to).toBe("+1555");
+    expect(params?.params?.accountId).toBe("kev");
   });
 
   it("splits collect-mode queues when accountId differs", async () => {
@@ -244,8 +270,11 @@ describe("subagent announce formatting", () => {
     ]);
 
     await new Promise((r) => setTimeout(r, 120));
-    expect(agentSpy).toHaveBeenCalledTimes(2);
-    const accountIds = agentSpy.mock.calls.map(
+    const sendCalls = callGatewayMock.mock.calls.filter(
+      (entry) => (entry?.[0] as { method?: string })?.method === "send",
+    );
+    expect(sendCalls).toHaveLength(2);
+    const accountIds = sendCalls.map(
       (call) => (call?.[0] as { params?: { accountId?: string } })?.params?.accountId,
     );
     expect(accountIds).toEqual(expect.arrayContaining(["acct-a", "acct-b"]));
@@ -260,7 +289,7 @@ describe("subagent announce formatting", () => {
       childSessionKey: "agent:main:subagent:test",
       childRunId: "run-direct",
       requesterSessionKey: "agent:main:main",
-      requesterOrigin: { channel: "whatsapp", accountId: "acct-123" },
+      requesterOrigin: { channel: "whatsapp", accountId: "acct-123", to: "+1555" },
       requesterDisplayKey: "main",
       task: "do thing",
       timeoutMs: 1000,
@@ -272,9 +301,13 @@ describe("subagent announce formatting", () => {
     });
 
     expect(didAnnounce).toBe(true);
-    const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
-    expect(call?.params?.channel).toBe("whatsapp");
-    expect(call?.params?.accountId).toBe("acct-123");
+    const call = callGatewayMock.mock.calls.find(
+      (entry) => (entry?.[0] as { method?: string })?.method === "send",
+    );
+    const params = call?.[0] as { params?: Record<string, unknown> } | undefined;
+    expect(params?.params?.channel).toBe("whatsapp");
+    expect(params?.params?.accountId).toBe("acct-123");
+    expect(params?.params?.to).toBe("+1555");
   });
 
   it("normalizes requesterOrigin for direct announce delivery", async () => {
@@ -286,7 +319,7 @@ describe("subagent announce formatting", () => {
       childSessionKey: "agent:main:subagent:test",
       childRunId: "run-direct-origin",
       requesterSessionKey: "agent:main:main",
-      requesterOrigin: { channel: " whatsapp ", accountId: " acct-987 " },
+      requesterOrigin: { channel: " whatsapp ", accountId: " acct-987 ", to: " +1444 " },
       requesterDisplayKey: "main",
       task: "do thing",
       timeoutMs: 1000,
@@ -298,9 +331,13 @@ describe("subagent announce formatting", () => {
     });
 
     expect(didAnnounce).toBe(true);
-    const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
-    expect(call?.params?.channel).toBe("whatsapp");
-    expect(call?.params?.accountId).toBe("acct-987");
+    const call = callGatewayMock.mock.calls.find(
+      (entry) => (entry?.[0] as { method?: string })?.method === "send",
+    );
+    const params = call?.[0] as { params?: Record<string, unknown> } | undefined;
+    expect(params?.params?.channel).toBe("whatsapp");
+    expect(params?.params?.accountId).toBe("acct-987");
+    expect(params?.params?.to).toBe("+1444");
   });
 
   it("prefers requesterOrigin channel over stale session lastChannel in queued announce", async () => {
@@ -333,12 +370,21 @@ describe("subagent announce formatting", () => {
     });
 
     expect(didAnnounce).toBe(true);
-    await expect.poll(() => agentSpy.mock.calls.length).toBe(1);
+    await expect
+      .poll(() =>
+        callGatewayMock.mock.calls.some(
+          (entry) => (entry?.[0] as { method?: string })?.method === "send",
+        ),
+      )
+      .toBe(true);
 
-    const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    const call = callGatewayMock.mock.calls.find(
+      (entry) => (entry?.[0] as { method?: string })?.method === "send",
+    );
+    const params = call?.[0] as { params?: Record<string, unknown> } | undefined;
     // The channel should match requesterOrigin, NOT the stale session entry.
-    expect(call?.params?.channel).toBe("bluebubbles");
-    expect(call?.params?.to).toBe("bluebubbles:chat_guid:123");
+    expect(params?.params?.channel).toBe("bluebubbles");
+    expect(params?.params?.to).toBe("bluebubbles:chat_guid:123");
   });
 
   it("splits collect-mode announces when accountId differs", async () => {
@@ -385,13 +431,22 @@ describe("subagent announce formatting", () => {
       outcome: { status: "ok" },
     });
 
-    await expect.poll(() => agentSpy.mock.calls.length).toBe(2);
+    await expect
+      .poll(
+        () =>
+          callGatewayMock.mock.calls.filter(
+            (entry) => (entry?.[0] as { method?: string })?.method === "send",
+          ).length,
+      )
+      .toBe(2);
 
-    const accountIds = agentSpy.mock.calls.map(
+    const sendCalls = callGatewayMock.mock.calls.filter(
+      (entry) => (entry?.[0] as { method?: string })?.method === "send",
+    );
+    const accountIds = sendCalls.map(
       (call) => (call[0] as { params?: Record<string, unknown> }).params?.accountId,
     );
     expect(accountIds).toContain("acct-a");
     expect(accountIds).toContain("acct-b");
-    expect(agentSpy).toHaveBeenCalledTimes(2);
   });
 });
