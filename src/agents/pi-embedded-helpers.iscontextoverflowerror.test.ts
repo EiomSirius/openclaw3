@@ -40,6 +40,29 @@ describe("isContextOverflowError", () => {
     }
   });
 
+  it("matches 'exceed context limit' error from claude-max-api proxy", () => {
+    // claude-max-api and similar proxies return this format when input + max_tokens exceeds the limit.
+    // Without this fix, auto-compaction is NOT triggered because this pattern wasn't recognized.
+    const samples = [
+      "input length and max_tokens exceed context limit: 171472 + 34048 > 200000",
+      "LLM request rejected: input length and max_tokens exceed context limit",
+      "exceed context limit",
+    ];
+    for (const sample of samples) {
+      expect(isContextOverflowError(sample)).toBe(true);
+    }
+  });
+
+  it("matches 'prompt too large' error", () => {
+    const samples = [
+      "prompt too large for the model",
+      "Context overflow: prompt too large for the model. Try again with less input or a larger-context model.",
+    ];
+    for (const sample of samples) {
+      expect(isContextOverflowError(sample)).toBe(true);
+    }
+  });
+
   it("ignores unrelated errors", () => {
     expect(isContextOverflowError("rate limit exceeded")).toBe(false);
     expect(isContextOverflowError("request size exceeds upload limit")).toBe(false);
