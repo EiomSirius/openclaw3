@@ -188,10 +188,40 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
   };
 
+  // Timeout for compaction retry promise to prevent deadlock.
+  // If the SDK's retry completeSimple() hangs forever, we force-resolve to avoid session lockup.
+  const COMPACTION_RETRY_TIMEOUT_MS = 120_000; // 2 minutes
+  let compactionRetryTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const clearCompactionRetryTimeout = () => {
+    if (compactionRetryTimeoutId !== undefined) {
+      clearTimeout(compactionRetryTimeoutId);
+      compactionRetryTimeoutId = undefined;
+    }
+  };
+
   const ensureCompactionPromise = () => {
     if (!state.compactionRetryPromise) {
+      // Clear any existing timeout before creating a new one to prevent leaks
+      clearCompactionRetryTimeout();
       state.compactionRetryPromise = new Promise((resolve) => {
         state.compactionRetryResolve = resolve;
+        // Safety timeout: force-resolve if compaction retry hangs to prevent deadlock (#5784)
+        compactionRetryTimeoutId = setTimeout(() => {
+          if (state.compactionRetryResolve) {
+            log.warn(
+              `compaction retry timeout after ${COMPACTION_RETRY_TIMEOUT_MS}ms - forcing resolve to prevent deadlock (runId=${params.runId})`,
+            );
+            state.compactionRetryResolve();
+            state.compactionRetryResolve = undefined;
+            state.compactionRetryPromise = null;
+            state.pendingCompactionRetry = 0;
+            compactionRetryTimeoutId = undefined;
+            // Reset state to match normal compaction-retry cleanup behavior
+            // (resetForCompactionRetry is defined later but accessible via closure)
+            resetForCompactionRetry();
+          }
+        }, COMPACTION_RETRY_TIMEOUT_MS);
       });
     }
   };
@@ -207,6 +237,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
     state.pendingCompactionRetry -= 1;
     if (state.pendingCompactionRetry === 0 && !state.compactionInFlight) {
+      clearCompactionRetryTimeout();
       state.compactionRetryResolve?.();
       state.compactionRetryResolve = undefined;
       state.compactionRetryPromise = null;
@@ -215,6 +246,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
 
   const maybeResolveCompactionWait = () => {
     if (state.pendingCompactionRetry === 0 && !state.compactionInFlight) {
+      clearCompactionRetryTimeout();
       state.compactionRetryResolve?.();
       state.compactionRetryResolve = undefined;
       state.compactionRetryPromise = null;
