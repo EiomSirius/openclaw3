@@ -265,6 +265,8 @@ export function describeReplyTarget(msg: TelegramMessage): TelegramReplyTarget |
   };
 }
 
+export type TelegramChatType = "private" | "group" | "supergroup" | "channel";
+
 export type TelegramForwardedContext = {
   from: string;
   date?: number;
@@ -273,6 +275,10 @@ export type TelegramForwardedContext = {
   fromUsername?: string;
   fromTitle?: string;
   fromSignature?: string;
+  /** Original chat type from forward_from_chat (e.g. "channel", "supergroup", "group"). */
+  fromChatType?: TelegramChatType;
+  /** Original message ID in the source chat (channel forwards). */
+  fromMessageId?: number;
 };
 
 function normalizeForwardedUserLabel(user: TelegramForwardUser) {
@@ -336,6 +342,7 @@ function buildForwardedContextFromChat(params: {
   date?: number;
   type: string;
   signature?: string;
+  messageId?: number;
 }): TelegramForwardedContext | null {
   const fallbackKind =
     params.type === "channel" || params.type === "legacy_channel" ? "channel" : "chat";
@@ -345,6 +352,7 @@ function buildForwardedContextFromChat(params: {
   }
   const signature = params.signature?.trim() || undefined;
   const from = signature ? `${display} (${signature})` : display;
+  const chatType = (params.chat.type?.trim() || undefined) as TelegramChatType | undefined;
   return {
     from,
     date: params.date,
@@ -353,12 +361,14 @@ function buildForwardedContextFromChat(params: {
     fromUsername: username,
     fromTitle: title,
     fromSignature: signature,
+    fromChatType: chatType,
+    fromMessageId: params.messageId,
   };
 }
 
 function resolveForwardOrigin(
   origin: TelegramForwardOrigin,
-  signature?: string,
+  legacySignature?: string,
 ): TelegramForwardedContext | null {
   if (origin.type === "user" && origin.sender_user) {
     return buildForwardedContextFromUser({
@@ -374,12 +384,15 @@ function resolveForwardOrigin(
       type: "hidden_user",
     });
   }
+  // Prefer author_signature from forward_origin over legacy forward_signature
+  const effectiveSignature =
+    origin.author_signature?.trim() || legacySignature?.trim() || undefined;
   if (origin.type === "chat" && origin.sender_chat) {
     return buildForwardedContextFromChat({
       chat: origin.sender_chat,
       date: origin.date,
       type: "chat",
-      signature,
+      signature: effectiveSignature,
     });
   }
   if (origin.type === "channel" && origin.chat) {
@@ -387,7 +400,8 @@ function resolveForwardOrigin(
       chat: origin.chat,
       date: origin.date,
       type: "channel",
-      signature,
+      signature: effectiveSignature,
+      messageId: origin.message_id,
     });
   }
   return null;
