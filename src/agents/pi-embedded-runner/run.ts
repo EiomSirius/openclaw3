@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import type { ThinkLevel } from "../../auto-reply/thinking.js";
 import type { RunEmbeddedPiAgentParams } from "./run/params.js";
 import type { EmbeddedPiAgentMeta, EmbeddedPiRunResult } from "./types.js";
+import { emitAgentEvent } from "../../infra/agent-events.js";
 import { enqueueCommandInLane } from "../../process/command-queue.js";
 import { resolveUserPath } from "../../utils.js";
 import { isMarkdownCapableMessageChannel } from "../../utils/message-channel.js";
@@ -66,6 +67,51 @@ function scrubAnthropicRefusalMagic(prompt: string): string {
     ANTHROPIC_MAGIC_STRING_TRIGGER_REFUSAL,
     ANTHROPIC_MAGIC_STRING_REPLACEMENT,
   );
+}
+
+function emitGuardrailBlockLifecycle(params: {
+  runId: string;
+  sessionKey?: string;
+  onAgentEvent?: (evt: { stream: string; data: Record<string, unknown> }) => void;
+  message: string;
+  startedAt: number;
+}) {
+  if (!params.runId) {
+    return;
+  }
+  const trimmed = params.message.trim();
+  emitAgentEvent({
+    runId: params.runId,
+    sessionKey: params.sessionKey,
+    stream: "lifecycle",
+    data: { phase: "start", startedAt: params.startedAt },
+  });
+  void params.onAgentEvent?.({
+    stream: "lifecycle",
+    data: { phase: "start" },
+  });
+  if (trimmed) {
+    emitAgentEvent({
+      runId: params.runId,
+      sessionKey: params.sessionKey,
+      stream: "assistant",
+      data: { text: trimmed, delta: trimmed },
+    });
+    void params.onAgentEvent?.({
+      stream: "assistant",
+      data: { text: trimmed, delta: trimmed },
+    });
+  }
+  emitAgentEvent({
+    runId: params.runId,
+    sessionKey: params.sessionKey,
+    stream: "lifecycle",
+    data: { phase: "end", endedAt: Date.now() },
+  });
+  void params.onAgentEvent?.({
+    stream: "lifecycle",
+    data: { phase: "end" },
+  });
 }
 
 export async function runEmbeddedPiAgent(
@@ -367,7 +413,81 @@ export async function runEmbeddedPiAgent(
             enforceFinalTag: params.enforceFinalTag,
           });
 
-          const { aborted, promptError, timedOut, sessionIdUsed, lastAssistant } = attempt;
+          const { aborted, promptError, timedOut, sessionIdUsed, lastAssistant, guardrailBlock } =
+            attempt;
+          const guardrailBlockSummary = guardrailBlock
+            ? {
+                stage: guardrailBlock.stage,
+                hookId: guardrailBlock.hookId,
+                reason: guardrailBlock.reason,
+              }
+            : undefined;
+
+          if (guardrailBlock) {
+            const isBeforeRequest = guardrailBlock.stage === "before_request";
+            if (isBeforeRequest) {
+              emitGuardrailBlockLifecycle({
+                runId: params.runId,
+                sessionKey: params.sessionKey ?? params.sessionId,
+                onAgentEvent: params.onAgentEvent,
+                message: attempt.assistantTexts.join("\n\n"),
+                startedAt: started,
+              });
+            }
+            const payloads = buildEmbeddedRunPayloads({
+              assistantTexts: attempt.assistantTexts,
+              toolMetas: attempt.toolMetas,
+              lastAssistant: isBeforeRequest ? undefined : attempt.lastAssistant,
+              lastToolError: undefined,
+              config: params.config,
+              sessionKey: params.sessionKey ?? params.sessionId,
+              verboseLevel: params.verboseLevel,
+              reasoningLevel: "off",
+              toolResultFormat: resolvedToolResultFormat,
+              inlineToolResultsAllowed: false,
+            });
+            const usage = isBeforeRequest
+              ? undefined
+              : normalizeUsage(attempt.lastAssistant?.usage as UsageLike);
+            const agentMeta: EmbeddedPiAgentMeta = {
+              sessionId: sessionIdUsed,
+              provider: attempt.lastAssistant?.provider ?? provider,
+              model: attempt.lastAssistant?.model ?? model.id,
+              usage,
+            };
+
+            log.debug(
+              `embedded run hook block: runId=${params.runId} sessionId=${params.sessionId} durationMs=${Date.now() - started} stage=${guardrailBlock.stage} hook=${guardrailBlock.hookId}`,
+            );
+
+            if (!isBeforeRequest && lastProfileId) {
+              await markAuthProfileGood({
+                store: authStore,
+                provider,
+                profileId: lastProfileId,
+                agentDir: params.agentDir,
+              });
+              await markAuthProfileUsed({
+                store: authStore,
+                profileId: lastProfileId,
+                agentDir: params.agentDir,
+              });
+            }
+
+            return {
+              payloads: payloads.length ? payloads : undefined,
+              meta: {
+                durationMs: Date.now() - started,
+                agentMeta,
+                aborted,
+                systemPromptReport: attempt.systemPromptReport,
+                guardrailBlock: guardrailBlockSummary,
+              },
+              didSendViaMessagingTool: attempt.didSendViaMessagingTool,
+              messagingToolSentTexts: attempt.messagingToolSentTexts,
+              messagingToolSentTargets: attempt.messagingToolSentTargets,
+            };
+          }
 
           if (promptError && !aborted) {
             const errorText = describeUnknownError(promptError);
@@ -667,6 +787,7 @@ export async function runEmbeddedPiAgent(
               agentMeta,
               aborted,
               systemPromptReport: attempt.systemPromptReport,
+              guardrailBlock: guardrailBlockSummary,
               // Handle client tool calls (OpenResponses hosted tools)
               stopReason: attempt.clientToolCall ? "tool_calls" : undefined,
               pendingToolCalls: attempt.clientToolCall
