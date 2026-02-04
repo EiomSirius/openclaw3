@@ -41,6 +41,18 @@ export type TelegramCustomCommand = {
   description: string;
 };
 
+/** Placeholder message configuration for Telegram. */
+export type TelegramPlaceholderConfig = {
+  /** Enable placeholder messages. Default: false. */
+  enabled?: boolean;
+  /** Custom messages to show while thinking. Randomly selected. */
+  messages?: string[];
+  /** Delete placeholder when response is ready. Default: true. */
+  deleteOnResponse?: boolean;
+  /** Tool display overrides. Key is tool name. */
+  toolDisplay?: Record<string, { emoji?: string; label?: string }>;
+};
+
 export type TelegramAccountConfig = {
   /** Optional display name for this account (used in CLI/UI lists). */
   name?: string;
@@ -130,6 +142,8 @@ export type TelegramAccountConfig = {
   heartbeat?: ChannelHeartbeatVisibilityConfig;
   /** Controls whether link previews are shown in outbound messages. Default: true. */
   linkPreview?: boolean;
+  /** Placeholder message shown while processing (thinking indicator). */
+  placeholder?: TelegramPlaceholderConfig;
 };
 
 export type TelegramTopicConfig = {
