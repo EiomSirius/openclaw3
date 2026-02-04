@@ -14,6 +14,7 @@ import { loadConfig } from "../config/config.js";
 import { writeConfigFile } from "../config/io.js";
 import { danger, logVerbose, warn } from "../globals.js";
 import { readChannelAllowFromStore } from "../pairing/pairing-store.js";
+import { DEFAULT_ACCOUNT_ID } from "../routing/session-key.js";
 import { withTelegramApiErrorLogging } from "./api-logging.js";
 import { firstDefined, isSenderAllowed, normalizeAllowFromWithStore } from "./bot-access.js";
 import { RegisterTelegramHandlerParams } from "./bot-native-commands.js";
@@ -679,13 +680,21 @@ export const registerTelegramHandlers = ({
         const errMsg = String(mediaErr);
         if (errMsg.includes("exceeds") && errMsg.includes("MB limit")) {
           const limitMb = Math.round(mediaMaxBytes / (1024 * 1024));
+          const configHint =
+            accountId !== DEFAULT_ACCOUNT_ID
+              ? `Set channels.telegram.accounts.${accountId}.mediaMaxMb (or channels.telegram.mediaMaxMb) to raise this limit.`
+              : "Set channels.telegram.mediaMaxMb to raise this limit.";
           await withTelegramApiErrorLogging({
             operation: "sendMessage",
             runtime,
             fn: () =>
-              bot.api.sendMessage(chatId, `⚠️ File too large. Maximum size is ${limitMb}MB.`, {
-                reply_to_message_id: msg.message_id,
-              }),
+              bot.api.sendMessage(
+                chatId,
+                `⚠️ File too large. Maximum size is ${limitMb}MB. ${configHint}`,
+                {
+                  reply_to_message_id: msg.message_id,
+                },
+              ),
           }).catch(() => {});
           logger.warn({ chatId, error: errMsg }, "media exceeds size limit");
           return;
