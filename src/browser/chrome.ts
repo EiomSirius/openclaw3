@@ -59,8 +59,14 @@ function resolveBrowserExecutable(resolved: ResolvedBrowserConfig): BrowserExecu
   return resolveBrowserExecutableForPlatform(resolved, process.platform);
 }
 
+/**
+ * Resolve the browser user data directory.
+ * Uses OPENCLAW_BROWSER_DATA_DIR env var if set (useful for Docker where CONFIG_DIR is mounted).
+ * Falls back to CONFIG_DIR/browser for backward compatibility.
+ */
 export function resolveOpenClawUserDataDir(profileName = DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME) {
-  return path.join(CONFIG_DIR, "browser", profileName, "user-data");
+  const browserDataDir = process.env.OPENCLAW_BROWSER_DATA_DIR || path.join(CONFIG_DIR, "browser");
+  return path.join(browserDataDir, profileName, "user-data");
 }
 
 function cdpUrlForPort(cdpPort: number) {
@@ -160,6 +166,25 @@ export async function isChromeCdpReady(
   return await canOpenWebSocket(wsUrl, handshakeTimeoutMs);
 }
 
+/**
+ * Clean up stale Chrome lock files that may prevent launching.
+ * This can happen when Chrome crashes or is killed abruptly (common in Docker).
+ */
+function cleanupStaleLockFiles(userDataDir: string) {
+  const lockFiles = ["SingletonLock", "SingletonCookie", "SingletonSocket"];
+  for (const lockFile of lockFiles) {
+    const lockPath = path.join(userDataDir, lockFile);
+    try {
+      if (fs.existsSync(lockPath)) {
+        fs.unlinkSync(lockPath);
+        log.debug(`Removed stale lock file: ${lockFile}`);
+      }
+    } catch {
+      // ignore - file may not exist or be already removed
+    }
+  }
+}
+
 export async function launchOpenClawChrome(
   resolved: ResolvedBrowserConfig,
   profile: ResolvedBrowserProfile,
@@ -178,6 +203,9 @@ export async function launchOpenClawChrome(
 
   const userDataDir = resolveOpenClawUserDataDir(profile.name);
   fs.mkdirSync(userDataDir, { recursive: true });
+
+  // Clean up stale lock files from previous crashes (common in Docker environments)
+  cleanupStaleLockFiles(userDataDir);
 
   const needsDecorate = !isProfileDecorated(
     userDataDir,
@@ -213,6 +241,13 @@ export async function launchOpenClawChrome(
     if (process.platform === "linux") {
       args.push("--disable-dev-shm-usage");
     }
+
+    // Stealth flags to avoid bot detection
+    args.push("--disable-blink-features=AutomationControlled");
+    args.push("--disable-infobars");
+    args.push(
+      "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    );
 
     // Always open a blank tab to ensure a target exists.
     args.push("about:blank");

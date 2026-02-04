@@ -96,6 +96,13 @@ const EXEC_EVENT_PROMPT =
   "Please relay the command output to the user in a helpful way. If the command succeeded, share the relevant output. " +
   "If it failed, explain what went wrong.";
 
+// Prompt used when a cron job triggers with a reminder/system event to deliver.
+// This overrides the standard heartbeat prompt to ensure the model relays the reminder
+// instead of just "HEARTBEAT_OK".
+const CRON_EVENT_PROMPT =
+  "A scheduled reminder has triggered. The reminder text is shown in the system messages above. " +
+  "Please relay this reminder to the user in a helpful way. Be concise and direct.";
+
 function resolveActiveHoursTimezone(cfg: OpenClawConfig, raw?: string): string {
   const trimmed = raw?.trim();
   if (!trimmed || trimmed === "user") {
@@ -512,13 +519,14 @@ export async function runHeartbeatOnce(opts: {
 
   // Skip heartbeat if HEARTBEAT.md exists but has no actionable content.
   // This saves API calls/costs when the file is effectively empty (only comments/headers).
-  // EXCEPTION: Don't skip for exec events - they have pending system events to process.
+  // EXCEPTION: Don't skip for exec events or cron events - they have pending system events to process.
   const isExecEventReason = opts.reason === "exec-event";
+  const isCronEventReason = opts.reason?.startsWith("cron:") ?? false;
   const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
   const heartbeatFilePath = path.join(workspaceDir, DEFAULT_HEARTBEAT_FILENAME);
   try {
     const heartbeatFileContent = await fs.readFile(heartbeatFilePath, "utf-8");
-    if (isHeartbeatContentEffectivelyEmpty(heartbeatFileContent) && !isExecEventReason) {
+    if (isHeartbeatContentEffectivelyEmpty(heartbeatFileContent) && !isExecEventReason && !isCronEventReason) {
       emitHeartbeatEvent({
         status: "skipped",
         reason: "empty-heartbeat-file",
@@ -545,19 +553,27 @@ export async function runHeartbeatOnce(opts: {
   const { sender } = resolveHeartbeatSenderContext({ cfg, entry, delivery });
   const responsePrefix = resolveEffectiveMessagesConfig(cfg, agentId).responsePrefix;
 
-  // Check if this is an exec event with pending exec completion system events.
+  // Check if this is an exec event or cron event with pending system events.
   // If so, use a specialized prompt that instructs the model to relay the result
   // instead of the standard heartbeat prompt with "reply HEARTBEAT_OK".
   const isExecEvent = opts.reason === "exec-event";
-  const pendingEvents = isExecEvent ? peekSystemEvents(sessionKey) : [];
+  const isCronEvent = opts.reason?.startsWith("cron:") ?? false;
+  const pendingEvents = (isExecEvent || isCronEvent) ? peekSystemEvents(sessionKey) : [];
   const hasExecCompletion = pendingEvents.some((evt) => evt.includes("Exec finished"));
+  // Only use CRON_EVENT_PROMPT if there are cron-specific events (not exec completions)
+  const cronEvents = isCronEvent ? pendingEvents.filter((evt) => !evt.includes("Exec finished")) : [];
+  const hasCronReminder = cronEvents.length > 0;
 
-  const prompt = hasExecCompletion ? EXEC_EVENT_PROMPT : resolveHeartbeatPrompt(cfg, heartbeat);
+  const prompt = hasExecCompletion
+    ? EXEC_EVENT_PROMPT
+    : hasCronReminder
+      ? CRON_EVENT_PROMPT
+      : resolveHeartbeatPrompt(cfg, heartbeat);
   const ctx = {
     Body: prompt,
     From: sender,
     To: sender,
-    Provider: hasExecCompletion ? "exec-event" : "heartbeat",
+    Provider: hasExecCompletion ? "exec-event" : hasCronReminder ? "cron-event" : "heartbeat",
     SessionKey: sessionKey,
   };
   if (!visibility.showAlerts && !visibility.showOk && !visibility.useIndicator) {

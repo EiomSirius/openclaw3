@@ -42,6 +42,17 @@ export async function ensureLoaded(state: CronServiceState) {
         mutated = true;
       }
     }
+
+    // Normalize enabled: coerce strings and default to true if missing
+    if (typeof raw.enabled !== "boolean") {
+      if (typeof raw.enabled === "string") {
+        const lower = raw.enabled.trim().toLowerCase();
+        raw.enabled = lower !== "false" && lower !== "0";
+      } else {
+        raw.enabled = true;
+      }
+      mutated = true;
+    }
   }
   state.store = { version: 1, jobs: jobs as unknown as CronJob[] };
   storeCache.set(state.deps.storePath, state.store);
