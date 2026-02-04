@@ -333,6 +333,7 @@ export async function startGatewayServer(
     controlUiEnabled,
     controlUiBasePath,
     controlUiRoot: controlUiRootState,
+    strictLoopback: cfgAtStart.gateway?.controlUi?.strictLoopback,
     openAiChatCompletionsEnabled,
     openResponsesEnabled,
     openResponsesConfig,
@@ -417,7 +418,9 @@ export async function startGatewayServer(
     skillsRefreshTimer = setTimeout(() => {
       skillsRefreshTimer = null;
       const latest = loadConfig();
-      void refreshRemoteBinsForConnectedNodes(latest);
+      void refreshRemoteBinsForConnectedNodes(latest).catch((err) => {
+        logHooks.error(`Failed to refresh remote bins: ${String(err)}`);
+      });
     }, skillsRefreshDelayMs);
   });
 
