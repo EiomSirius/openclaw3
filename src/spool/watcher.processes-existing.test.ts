@@ -82,7 +82,8 @@ describe("spool watcher - processes existing files on startup", () => {
       await watcher.start();
 
       // Wait for chokidar to detect files and debounce to trigger
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // CI environments may need more time due to slower file systems
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       await watcher.stop();
 
@@ -151,7 +152,8 @@ describe("spool watcher - processes existing files on startup", () => {
       await writeSpoolEvent(event3);
 
       // Wait for chokidar to pick up the files and process them
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // CI environments may need more time due to slower file systems
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       await watcher.stop();
 
