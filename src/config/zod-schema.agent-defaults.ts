@@ -13,6 +13,40 @@ import {
   HumanDelaySchema,
 } from "./zod-schema.core.js";
 
+export const ContextPruningSchema = z
+  .object({
+    mode: z.union([z.literal("off"), z.literal("cache-ttl")]).optional(),
+    ttl: z.string().optional(),
+    keepLastAssistants: z.number().int().nonnegative().optional(),
+    softTrimRatio: z.number().min(0).max(1).optional(),
+    hardClearRatio: z.number().min(0).max(1).optional(),
+    minPrunableToolChars: z.number().int().nonnegative().optional(),
+    tools: z
+      .object({
+        allow: z.array(z.string()).optional(),
+        deny: z.array(z.string()).optional(),
+      })
+      .strict()
+      .optional(),
+    softTrim: z
+      .object({
+        maxChars: z.number().int().nonnegative().optional(),
+        headChars: z.number().int().nonnegative().optional(),
+        tailChars: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+    hardClear: z
+      .object({
+        enabled: z.boolean().optional(),
+        placeholder: z.string().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .optional();
+
 export const AgentDefaultsSchema = z
   .object({
     model: z
@@ -53,39 +87,7 @@ export const AgentDefaultsSchema = z
     contextTokens: z.number().int().positive().optional(),
     cliBackends: z.record(z.string(), CliBackendSchema).optional(),
     memorySearch: MemorySearchSchema,
-    contextPruning: z
-      .object({
-        mode: z.union([z.literal("off"), z.literal("cache-ttl")]).optional(),
-        ttl: z.string().optional(),
-        keepLastAssistants: z.number().int().nonnegative().optional(),
-        softTrimRatio: z.number().min(0).max(1).optional(),
-        hardClearRatio: z.number().min(0).max(1).optional(),
-        minPrunableToolChars: z.number().int().nonnegative().optional(),
-        tools: z
-          .object({
-            allow: z.array(z.string()).optional(),
-            deny: z.array(z.string()).optional(),
-          })
-          .strict()
-          .optional(),
-        softTrim: z
-          .object({
-            maxChars: z.number().int().nonnegative().optional(),
-            headChars: z.number().int().nonnegative().optional(),
-            tailChars: z.number().int().nonnegative().optional(),
-          })
-          .strict()
-          .optional(),
-        hardClear: z
-          .object({
-            enabled: z.boolean().optional(),
-            placeholder: z.string().optional(),
-          })
-          .strict()
-          .optional(),
-      })
-      .strict()
-      .optional(),
+    contextPruning: ContextPruningSchema,
     compaction: z
       .object({
         mode: z.union([z.literal("default"), z.literal("safeguard")]).optional(),

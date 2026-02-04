@@ -121,6 +121,10 @@ export async function runCronIsolatedAgentTurn(params: {
   } else if (overrideModel) {
     agentCfg.model = overrideModel;
   }
+  // Apply per-job contextPruning override if specified
+  if (params.job.contextPruning !== undefined) {
+    agentCfg.contextPruning = params.job.contextPruning;
+  }
   const cfgWithAgentDefaults: OpenClawConfig = {
     ...params.cfg,
     agents: Object.assign({}, params.cfg.agents, { defaults: agentCfg }),

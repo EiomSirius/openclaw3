@@ -1,4 +1,5 @@
 import type { ChannelId } from "../channels/plugins/types.js";
+import type { AgentContextPruningConfig } from "../config/types.agent-defaults.js";
 
 export type CronSchedule =
   | { kind: "at"; atMs: number }
@@ -76,6 +77,12 @@ export type CronJob = {
   wakeMode: CronWakeMode;
   payload: CronPayload;
   isolation?: CronIsolation;
+  /**
+   * Per-job context pruning override.
+   * When set, overrides agents.defaults.contextPruning for this job's isolated session.
+   * Use { mode: "off" } to disable caching for simple script-running jobs.
+   */
+  contextPruning?: AgentContextPruningConfig;
   state: CronJobState;
 };
 

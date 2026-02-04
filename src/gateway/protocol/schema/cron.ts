@@ -1,6 +1,47 @@
 import { Type } from "@sinclair/typebox";
 import { NonEmptyString } from "./primitives.js";
 
+// Context pruning configuration schema
+export const ContextPruningConfigSchema = Type.Object(
+  {
+    mode: Type.Optional(Type.Union([Type.Literal("off"), Type.Literal("cache-ttl")])),
+    ttl: Type.Optional(Type.String()),
+    keepLastAssistants: Type.Optional(Type.Integer({ minimum: 0 })),
+    softTrimRatio: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+    hardClearRatio: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+    minPrunableToolChars: Type.Optional(Type.Integer({ minimum: 0 })),
+    tools: Type.Optional(
+      Type.Object(
+        {
+          allow: Type.Optional(Type.Array(Type.String())),
+          deny: Type.Optional(Type.Array(Type.String())),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    softTrim: Type.Optional(
+      Type.Object(
+        {
+          maxChars: Type.Optional(Type.Integer({ minimum: 0 })),
+          headChars: Type.Optional(Type.Integer({ minimum: 0 })),
+          tailChars: Type.Optional(Type.Integer({ minimum: 0 })),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+    hardClear: Type.Optional(
+      Type.Object(
+        {
+          enabled: Type.Optional(Type.Boolean()),
+          placeholder: Type.Optional(Type.String()),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export const CronScheduleSchema = Type.Union([
   Type.Object(
     {
@@ -113,6 +154,7 @@ export const CronJobSchema = Type.Object(
     wakeMode: Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")]),
     payload: CronPayloadSchema,
     isolation: Type.Optional(CronIsolationSchema),
+    contextPruning: Type.Optional(ContextPruningConfigSchema),
     state: CronJobStateSchema,
   },
   { additionalProperties: false },
@@ -139,6 +181,7 @@ export const CronAddParamsSchema = Type.Object(
     wakeMode: Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")]),
     payload: CronPayloadSchema,
     isolation: Type.Optional(CronIsolationSchema),
+    contextPruning: Type.Optional(ContextPruningConfigSchema),
   },
   { additionalProperties: false },
 );
@@ -155,6 +198,7 @@ export const CronJobPatchSchema = Type.Object(
     wakeMode: Type.Optional(Type.Union([Type.Literal("next-heartbeat"), Type.Literal("now")])),
     payload: Type.Optional(CronPayloadPatchSchema),
     isolation: Type.Optional(CronIsolationSchema),
+    contextPruning: Type.Optional(ContextPruningConfigSchema),
     state: Type.Optional(Type.Partial(CronJobStateSchema)),
   },
   { additionalProperties: false },
