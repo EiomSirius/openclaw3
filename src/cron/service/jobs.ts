@@ -70,7 +70,13 @@ export function recomputeNextRuns(state: CronServiceState) {
       );
       job.state.runningAtMs = undefined;
     }
-    job.state.nextRunAtMs = computeJobNextRunAtMs(job, now);
+    const nextRunAtMs = job.state.nextRunAtMs;
+    const hasNextRun =
+      typeof nextRunAtMs === "number" && Number.isFinite(nextRunAtMs) && nextRunAtMs >= 0;
+    // Preserve existing nextRunAtMs on restart so missed runs stay due.
+    if (!hasNextRun) {
+      job.state.nextRunAtMs = computeJobNextRunAtMs(job, now);
+    }
   }
 }
 
