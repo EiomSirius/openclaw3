@@ -145,4 +145,29 @@ describe("control UI assets helpers", () => {
       await fs.rm(tmp, { recursive: true, force: true });
     }
   });
+
+  it("resolves control-ui root using explicit cwd even after process.chdir (issue #8325)", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-ui-cwd-"));
+    const prevCwd = process.cwd();
+    try {
+      const appDir = path.join(tmp, "app");
+      const workspaceDir = path.join(tmp, "workspace");
+      await fs.mkdir(path.join(appDir, "dist", "control-ui"), { recursive: true });
+      await fs.mkdir(workspaceDir, { recursive: true });
+      await fs.writeFile(path.join(appDir, "package.json"), JSON.stringify({ name: "openclaw" }));
+      await fs.writeFile(path.join(appDir, "dist", "control-ui", "index.html"), "<html></html>\n");
+
+      const initialCwd = appDir;
+      process.chdir(workspaceDir);
+
+      expect(resolveControlUiRootSync({ cwd: initialCwd })).toBe(
+        path.join(appDir, "dist", "control-ui"),
+      );
+
+      expect(resolveControlUiRootSync({ cwd: process.cwd() })).toBeNull();
+    } finally {
+      process.chdir(prevCwd);
+      await fs.rm(tmp, { recursive: true, force: true });
+    }
+  });
 });
