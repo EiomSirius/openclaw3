@@ -1,7 +1,12 @@
 import type { HeartbeatRunResult } from "../../infra/heartbeat-wake.js";
 import type { CronJob } from "../types.js";
 import type { CronEvent, CronServiceState } from "./state.js";
-import { computeJobNextRunAtMs, nextWakeAtMs, resolveJobPayloadTextForMain } from "./jobs.js";
+import {
+  computeJobNextRunAtMs,
+  getEffectiveNextRunAtMs,
+  nextWakeAtMs,
+  resolveJobPayloadTextForMain,
+} from "./jobs.js";
 import { locked } from "./locked.js";
 import { ensureLoaded, persist } from "./store.js";
 
@@ -59,7 +64,7 @@ export async function runDueJobs(state: CronServiceState) {
     if (typeof j.state.runningAtMs === "number") {
       return false;
     }
-    const next = j.state.nextRunAtMs;
+    const next = getEffectiveNextRunAtMs(j, now);
     return typeof next === "number" && now >= next;
   });
   for (const job of due) {

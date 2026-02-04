@@ -3,7 +3,7 @@ import type { CronSchedule } from "./types.js";
 
 export function computeNextRunAtMs(schedule: CronSchedule, nowMs: number): number | undefined {
   if (schedule.kind === "at") {
-    return schedule.atMs > nowMs ? schedule.atMs : undefined;
+    return schedule.atMs;
   }
 
   if (schedule.kind === "every") {
