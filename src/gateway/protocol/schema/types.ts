@@ -32,6 +32,7 @@ import type {
   ChannelsStatusParamsSchema,
   ChannelsStatusResultSchema,
   TalkModeParamsSchema,
+  WebLoginPairingStartParamsSchema,
   WebLoginStartParamsSchema,
   WebLoginWaitParamsSchema,
 } from "./channels.js";
@@ -176,6 +177,7 @@ export type ChannelsStatusParams = Static<typeof ChannelsStatusParamsSchema>;
 export type ChannelsStatusResult = Static<typeof ChannelsStatusResultSchema>;
 export type ChannelsLogoutParams = Static<typeof ChannelsLogoutParamsSchema>;
 export type WebLoginStartParams = Static<typeof WebLoginStartParamsSchema>;
+export type WebLoginPairingStartParams = Static<typeof WebLoginPairingStartParamsSchema>;
 export type WebLoginWaitParams = Static<typeof WebLoginWaitParamsSchema>;
 export type AgentSummary = Static<typeof AgentSummarySchema>;
 export type AgentsFileEntry = Static<typeof AgentsFileEntrySchema>;
