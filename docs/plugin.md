@@ -109,8 +109,8 @@ OpenClaw scans, in order:
 - `<openclaw>/extensions/*`
 
 Bundled plugins must be enabled explicitly via `plugins.entries.<id>.enabled`
-or `openclaw plugins enable <id>`. Installed plugins are enabled by default,
-but can be disabled the same way.
+or `openclaw plugins enable <id>`. Installed plugins are disabled by default
+until you enable them the same way.
 
 Each plugin must include a `openclaw.plugin.json` file in its root. If a path
 points at a file, the plugin root is the file's directory and must contain the
