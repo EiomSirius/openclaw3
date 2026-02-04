@@ -3,6 +3,9 @@ import type { OpenClawConfig } from "../../config/config.js";
 import type { FailoverReason } from "./types.js";
 import { formatSandboxToolPolicyBlockedMessage } from "../sandbox.js";
 
+export const BILLING_ERROR_USER_MESSAGE =
+  "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check your provider's billing dashboard and top up or switch to a different API key.";
+
 export function isContextOverflowError(errorMessage?: string): boolean {
   if (!errorMessage) {
     return false;
@@ -369,11 +372,7 @@ export function formatAssistantErrorText(
   }
 
   if (isBillingErrorMessage(raw)) {
-    return (
-      "⚠️ API provider returned a billing error — your API key has run out of credits " +
-      "or has an insufficient balance. Check your provider's billing dashboard and top up or " +
-      "switch to a different API key."
-    );
+    return BILLING_ERROR_USER_MESSAGE;
   }
 
   if (isLikelyHttpErrorText(raw) || isRawApiErrorPayload(raw)) {
@@ -412,11 +411,7 @@ export function sanitizeUserFacingText(text: string): string {
   }
 
   if (isBillingErrorMessage(trimmed)) {
-    return (
-      "⚠️ API provider returned a billing error — your API key has run out of credits " +
-      "or has an insufficient balance. Check your provider's billing dashboard and top up or " +
-      "switch to a different API key."
-    );
+    return BILLING_ERROR_USER_MESSAGE;
   }
 
   if (isRawApiErrorPayload(trimmed) || isLikelyHttpErrorText(trimmed)) {

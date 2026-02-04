@@ -29,6 +29,7 @@ import {
 import { normalizeProviderId } from "../model-selection.js";
 import { ensureOpenClawModelsJson } from "../models-config.js";
 import {
+  BILLING_ERROR_USER_MESSAGE,
   classifyFailoverReason,
   formatAssistantErrorText,
   isAuthAssistantError,
@@ -610,7 +611,7 @@ export async function runEmbeddedPiAgent(
                   : rateLimitFailure
                     ? "LLM request rate limited."
                     : billingFailure
-                      ? "⚠️ API provider returned a billing error — check your API key credits/balance."
+                      ? BILLING_ERROR_USER_MESSAGE
                       : authFailure
                         ? "LLM request unauthorized."
                         : "LLM request failed.");
