@@ -321,6 +321,33 @@ export async function agentCommand(
         model = storedModelOverride;
       }
     }
+
+    // Direct model override from opts takes precedence over session-stored override.
+    // This avoids race conditions when sessions_spawn patches the session then immediately
+    // calls agent before the patch is visible in the loaded session entry.
+    const directModelOverride = opts.model?.trim();
+    if (directModelOverride) {
+      const [overrideProvider, overrideModel] = directModelOverride.includes("/")
+        ? directModelOverride.split("/", 2)
+        : [undefined, directModelOverride];
+      // Reject invalid model formats (e.g., "openai/" with empty model segment)
+      const hasSlash = directModelOverride.includes("/");
+      const validFormat = !hasSlash || (overrideProvider?.trim() && overrideModel?.trim());
+      
+      if (validFormat) {
+        const candidateProvider = overrideProvider || defaultProvider;
+        const candidateModel = overrideModel || directModelOverride;
+        const key = modelKey(candidateProvider, candidateModel);
+        if (
+          isCliProvider(candidateProvider, cfg) ||
+          allowedModelKeys.size === 0 ||
+          allowedModelKeys.has(key)
+        ) {
+          provider = candidateProvider;
+          model = candidateModel;
+        }
+      }
+    }
     if (sessionEntry) {
       const authProfileId = sessionEntry.authProfileOverride;
       if (authProfileId) {

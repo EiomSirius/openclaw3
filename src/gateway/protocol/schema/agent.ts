@@ -67,6 +67,8 @@ export const AgentParamsSchema = Type.Object(
     idempotencyKey: NonEmptyString,
     label: Type.Optional(SessionLabelString),
     spawnedBy: Type.Optional(Type.String()),
+    /** Model override for this agent run (provider/model format). */
+    model: Type.Optional(Type.String()),
   },
   { additionalProperties: false },
 );

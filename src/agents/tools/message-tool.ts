@@ -417,6 +417,9 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
         agentId: options?.agentSessionKey
           ? resolveSessionAgentId({ sessionKey: options.agentSessionKey, config: cfg })
           : undefined,
+        // Pass the session key to prevent corrupting the original conversation's
+        // deliveryContext when sending outbound messages. See #8154.
+        sessionKey: options?.agentSessionKey,
         abortSignal: signal,
       });
 

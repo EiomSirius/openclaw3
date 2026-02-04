@@ -112,6 +112,43 @@ describe("sanitizeToolUseResultPairing", () => {
     expect(out.some((m) => m.role === "toolResult")).toBe(false);
     expect(out.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
+
+  it("handles Anthropic snake_case tool_use format", () => {
+    // Anthropic uses type: "tool_use" (snake_case) instead of "toolUse" (camelCase)
+    // This test verifies we correctly extract tool calls in Anthropic's format
+    const input = [
+      {
+        role: "assistant",
+        content: [
+          { type: "tool_use", id: "toolu_01ABC", name: "read" },
+          { type: "tool_use", id: "toolu_01XYZ", name: "exec" },
+        ],
+      },
+      { role: "user", content: "user message" },
+      {
+        role: "toolResult",
+        toolCallId: "toolu_01XYZ",
+        toolName: "exec",
+        content: [{ type: "text", text: "ok" }],
+        isError: false,
+      },
+    ] satisfies AgentMessage[];
+
+    const out = sanitizeToolUseResultPairing(input);
+    
+    // Should insert synthetic result for missing toolu_01ABC
+    expect(out[0]?.role).toBe("assistant");
+    expect(out[1]?.role).toBe("toolResult");
+    expect((out[1] as { toolCallId?: string }).toolCallId).toBe("toolu_01ABC");
+    expect((out[1] as { isError?: boolean }).isError).toBe(true);
+    
+    // Should keep the existing result for toolu_01XYZ
+    expect(out[2]?.role).toBe("toolResult");
+    expect((out[2] as { toolCallId?: string }).toolCallId).toBe("toolu_01XYZ");
+    expect((out[2] as { isError?: boolean }).isError).toBe(false);
+    
+    expect(out[3]?.role).toBe("user");
+  });
 });
 
 describe("sanitizeToolCallInputs", () => {
