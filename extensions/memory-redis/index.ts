@@ -1,0 +1,772 @@
+/**
+ * Agent Memory Plugin
+ *
+ * Long-term memory with vector search for AI conversations.
+ * Uses agent-memory-server (Redis-backed) for storage and semantic search.
+ *
+ * Features:
+ * - Auto-recall: Semantic search for relevant long-term memories
+ * - Auto-capture: Saves conversation to working memory for background extraction
+ * - Manual tools: Store, search, and forget memories explicitly
+ *
+ * The server handles memory extraction in the background, keeping the client fast.
+ *
+ * ## Memory Retrieval
+ *
+ * The plugin uses semantic search (`searchLongTermMemory`) for auto-recall.
+ * Conversation history is handled separately, so we only inject long-term
+ * memories - not working memory (recent messages).
+ *
+ * ## Extraction Strategies
+ *
+ * Configure how the server extracts memories from conversations:
+ *
+ * - **discrete** (default): Extract semantic and episodic memories
+ * - **summary**: Maintain a running summary of the conversation
+ * - **preferences**: Focus on extracting user preferences and settings
+ * - **custom**: Use a custom extraction prompt for specialized use cases
+ */
+
+import type { MemoryMessage } from "agent-memory-client";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { Type } from "@sinclair/typebox";
+import { MemoryAPIClient, MemoryNotFoundError } from "agent-memory-client";
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { stringEnum } from "openclaw/plugin-sdk";
+import { type MemoryConfig, memoryConfigSchema } from "./config.js";
+
+// ============================================================================
+// Session Store Helpers
+// ============================================================================
+
+/**
+ * Read the sessionId from the OpenClaw session store.
+ *
+ * Session store is at: ~/.openclaw/agents/<agentId>/sessions/sessions.json
+ * Format: { "agent:main:main": { "sessionId": "uuid", ... }, ... }
+ */
+export function readSessionIdFromStore(sessionKey: string): string | null {
+  try {
+    // Extract agentId from sessionKey (e.g., "agent:main:main" -> "main")
+    const parts = sessionKey.split(":");
+    const agentId = parts.length >= 2 ? parts[1] : "main";
+
+    const storePath = path.join(
+      os.homedir(),
+      ".openclaw",
+      "agents",
+      agentId,
+      "sessions",
+      "sessions.json",
+    );
+
+    if (!fs.existsSync(storePath)) {
+      return null;
+    }
+
+    const data = JSON.parse(fs.readFileSync(storePath, "utf-8"));
+    const entry = data[sessionKey];
+
+    if (entry && typeof entry.sessionId === "string") {
+      return entry.sessionId;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================================
+// Types
+// ============================================================================
+
+const MEMORY_CATEGORIES = ["preference", "fact", "decision", "entity", "other"] as const;
+type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+
+type MemorySearchResult = {
+  id: string;
+  text: string;
+  score: number;
+  category?: string;
+  topics?: string[];
+  entities?: string[];
+};
+
+// ============================================================================
+// Message conversion helpers
+// ============================================================================
+
+/**
+ * Extract text content from a message content block (handles string or array format)
+ */
+function extractTextContent(content: unknown): string {
+  if (typeof content === "string") return content;
+
+  if (Array.isArray(content)) {
+    const texts: string[] = [];
+    for (const block of content) {
+      if (
+        block &&
+        typeof block === "object" &&
+        "type" in block &&
+        (block as Record<string, unknown>).type === "text" &&
+        "text" in block &&
+        typeof (block as Record<string, unknown>).text === "string"
+      ) {
+        texts.push((block as Record<string, unknown>).text as string);
+      }
+    }
+    return texts.join("\n");
+  }
+
+  return "";
+}
+
+/**
+ * Strip envelope metadata from prompts before searching.
+ * Removes [message_id: ...] hints and envelope headers like [Channel user timestamp].
+ */
+function stripEnvelopeForSearch(text: string): string {
+  // Strip [message_id: ...] lines
+  const lines = text.split(/\r?\n/);
+  const filtered = lines.filter((line) => !/^\[message_id:\s*[^\]]+\]$/.test(line.trim()));
+  let result = filtered.join("\n");
+
+  // Strip envelope header like [Channel user timestamp] at the start
+  const envelopeMatch = result.match(/^\[([^\]]+)\]\s*/);
+  if (envelopeMatch) {
+    const header = envelopeMatch[1] ?? "";
+    // Check if it looks like an envelope (has multiple space-separated parts)
+    if (header.split(/\s+/).length >= 2) {
+      result = result.slice(envelopeMatch[0].length);
+    }
+  }
+
+  return result.trim();
+}
+
+/**
+ * Convert messages to MemoryMessage format for working memory.
+ * Preserves original timestamps from pi-ai messages to enable deduplication.
+ */
+export function convertToMemoryMessages(messages: unknown[]): MemoryMessage[] {
+  const result: MemoryMessage[] = [];
+
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") continue;
+    const msgObj = msg as Record<string, unknown>;
+
+    const role = msgObj.role;
+    if (typeof role !== "string") continue;
+
+    // Only include user and assistant messages
+    if (role !== "user" && role !== "assistant") continue;
+
+    const content = extractTextContent(msgObj.content);
+    if (!content.trim()) continue;
+
+    // Skip injected memory context
+    if (content.includes("<relevant-memories>")) continue;
+
+    // Preserve original timestamp from pi-ai message (Unix ms), fallback to now
+    const msgTimestamp = typeof msgObj.timestamp === "number" ? msgObj.timestamp : Date.now();
+
+    result.push({
+      role,
+      content,
+      id: typeof msgObj.id === "string" ? msgObj.id : randomUUID(),
+      created_at: new Date(msgTimestamp).toISOString(),
+    });
+  }
+
+  return result;
+}
+
+// ============================================================================
+// Category detection for manual store tool
+// ============================================================================
+
+function detectCategory(text: string): MemoryCategory {
+  const lower = text.toLowerCase();
+  if (/prefer|radši|like|love|hate|want/i.test(lower)) return "preference";
+  if (/rozhodli|decided|will use|budeme/i.test(lower)) return "decision";
+  if (/\+\d{10,}|@[\w.-]+\.\w+|is called|jmenuje se/i.test(lower)) return "entity";
+  if (/is|are|has|have|je|má|jsou/i.test(lower)) return "fact";
+  return "other";
+}
+
+// ============================================================================
+// Plugin Definition
+// ============================================================================
+
+const redisMemoryPlugin = {
+  id: "redis-memory",
+  name: "Redis Memory",
+  description: "Redis-backed long-term memory via agent-memory-server with auto-recall/capture",
+  kind: "memory",
+  configSchema: memoryConfigSchema,
+
+  register(api: OpenClawPluginApi) {
+    const cfg = memoryConfigSchema.parse(api.pluginConfig);
+    const client = new MemoryAPIClient({
+      baseUrl: cfg.serverUrl,
+      apiKey: cfg.apiKey,
+      bearerToken: cfg.bearerToken,
+      defaultNamespace: cfg.namespace,
+      timeout: cfg.timeout,
+    });
+
+    api.logger.info?.(
+      `redis-memory: plugin registered (server: ${cfg.serverUrl}, namespace: ${cfg.namespace ?? "default"})`,
+    );
+
+    // ========================================================================
+    // Tools
+    // ========================================================================
+
+    api.registerTool(
+      {
+        name: "memory_recall",
+        label: "Memory Recall",
+        description: cfg.recallDescription!,
+        parameters: Type.Object({
+          query: Type.String({ description: "Search query" }),
+          limit: Type.Optional(Type.Number({ description: "Max results (default: 5)" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { query, limit = 5 } = params as { query: string; limit?: number };
+
+          try {
+            const results = await client.searchLongTermMemory({
+              text: query,
+              limit,
+              namespace: cfg.namespace ? { eq: cfg.namespace } : undefined,
+              userId: cfg.userId ? { eq: cfg.userId } : undefined,
+            });
+
+            if (results.memories.length === 0) {
+              return {
+                content: [{ type: "text", text: "No relevant memories found." }],
+                details: { count: 0 },
+              };
+            }
+
+            // Convert distance to similarity score (lower distance = higher similarity)
+            const mapped: MemorySearchResult[] = results.memories.map((m) => ({
+              id: m.id,
+              text: m.text,
+              score: Math.max(0, 1 - (m.dist ?? 0)),
+              topics: m.topics ?? undefined,
+              entities: m.entities ?? undefined,
+            }));
+
+            // Filter by minimum score
+            const filtered = mapped.filter((r) => r.score >= cfg.minScore!);
+
+            if (filtered.length === 0) {
+              return {
+                content: [{ type: "text", text: "No relevant memories found." }],
+                details: { count: 0 },
+              };
+            }
+
+            const text = filtered
+              .map((r, i) => `${i + 1}. ${r.text} (${(r.score * 100).toFixed(0)}%)`)
+              .join("\n");
+
+            return {
+              content: [{ type: "text", text: `Found ${filtered.length} memories:\n\n${text}` }],
+              details: { count: filtered.length, memories: filtered },
+            };
+          } catch (err) {
+            api.logger.warn(`redis-memory: recall failed: ${String(err)}`);
+            return {
+              content: [{ type: "text", text: `Memory search failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_recall" },
+    );
+
+    api.registerTool(
+      {
+        name: "memory_store",
+        label: "Memory Store",
+        description: cfg.storeDescription!,
+        parameters: Type.Object({
+          text: Type.String({ description: "Information to remember" }),
+          category: Type.Optional(stringEnum(MEMORY_CATEGORIES)),
+        }),
+        async execute(_toolCallId, params) {
+          const { text, category = "other" } = params as {
+            text: string;
+            category?: MemoryCategory;
+          };
+
+          // Validate text is non-empty
+          if (!text || !text.trim()) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "Error: The 'text' parameter is required and cannot be empty. Please provide the actual content you want to store in memory.",
+                },
+              ],
+              details: { error: "empty_text", action: "rejected" },
+            };
+          }
+
+          try {
+            // Check for duplicates by searching first
+            const existing = await client.searchLongTermMemory({
+              text,
+              limit: 1,
+              namespace: cfg.namespace ? { eq: cfg.namespace } : undefined,
+              userId: cfg.userId ? { eq: cfg.userId } : undefined,
+            });
+
+            if (existing.memories.length > 0 && existing.memories[0].dist < 0.05) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Similar memory already exists: "${existing.memories[0].text}"`,
+                  },
+                ],
+                details: {
+                  action: "duplicate",
+                  existingId: existing.memories[0].id,
+                  existingText: existing.memories[0].text,
+                },
+              };
+            }
+
+            const memoryId = randomUUID();
+            await client.createLongTermMemory(
+              [
+                {
+                  id: memoryId,
+                  text,
+                  topics: [category],
+                  namespace: cfg.namespace,
+                },
+              ],
+              { namespace: cfg.namespace },
+            );
+
+            return {
+              content: [{ type: "text", text: `Stored: "${text.slice(0, 100)}..."` }],
+              details: { action: "created", id: memoryId },
+            };
+          } catch (err) {
+            api.logger.warn(`redis-memory: store failed: ${String(err)}`);
+            return {
+              content: [{ type: "text", text: `Memory store failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_store" },
+    );
+
+    api.registerTool(
+      {
+        name: "memory_forget",
+        label: "Memory Forget",
+        description: cfg.forgetDescription!,
+        parameters: Type.Object({
+          query: Type.Optional(Type.String({ description: "Search to find memory" })),
+          memoryId: Type.Optional(Type.String({ description: "Specific memory ID" })),
+        }),
+        async execute(_toolCallId, params) {
+          const { query, memoryId } = params as { query?: string; memoryId?: string };
+
+          try {
+            if (memoryId) {
+              await client.deleteLongTermMemories([memoryId], {
+                namespace: cfg.namespace,
+              });
+              return {
+                content: [{ type: "text", text: `Memory ${memoryId} forgotten.` }],
+                details: { action: "deleted", id: memoryId },
+              };
+            }
+
+            if (query) {
+              const results = await client.searchLongTermMemory({
+                text: query,
+                limit: 5,
+                namespace: cfg.namespace ? { eq: cfg.namespace } : undefined,
+                userId: cfg.userId ? { eq: cfg.userId } : undefined,
+              });
+
+              if (results.memories.length === 0) {
+                return {
+                  content: [{ type: "text", text: "No matching memories found." }],
+                  details: { found: 0 },
+                };
+              }
+
+              // Convert distance to similarity score
+              const scored = results.memories.map((m) => ({
+                ...m,
+                score: Math.max(0, 1 - (m.dist ?? 0)),
+              }));
+
+              if (scored.length === 1 && scored[0].score > 0.9) {
+                await client.deleteLongTermMemories([scored[0].id], {
+                  namespace: cfg.namespace,
+                });
+                return {
+                  content: [{ type: "text", text: `Forgotten: "${scored[0].text}"` }],
+                  details: { action: "deleted", id: scored[0].id },
+                };
+              }
+
+              const list = scored
+                .map((r) => `- [${r.id.slice(0, 8)}] ${r.text.slice(0, 60)}...`)
+                .join("\n");
+
+              const candidates = scored.map((r) => ({
+                id: r.id,
+                text: r.text,
+                score: r.score,
+              }));
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Found ${scored.length} candidates. Specify memoryId:\n${list}`,
+                  },
+                ],
+                details: { action: "candidates", candidates },
+              };
+            }
+
+            return {
+              content: [{ type: "text", text: "Provide query or memoryId." }],
+              details: { error: "missing_param" },
+            };
+          } catch (err) {
+            api.logger.warn(`redis-memory: forget failed: ${String(err)}`);
+            return {
+              content: [{ type: "text", text: `Memory forget failed: ${String(err)}` }],
+              details: { error: String(err) },
+            };
+          }
+        },
+      },
+      { name: "memory_forget" },
+    );
+
+    // ========================================================================
+    // Summary View Management
+    // ========================================================================
+
+    let summaryViewId: string | null = null;
+
+    // Track max message timestamp per session to avoid re-sending messages
+    const sessionMaxTimestamps = new Map<string, number>();
+
+    async function ensureSummaryView(): Promise<string | null> {
+      try {
+        const views = await client.listSummaryViews();
+        const existing = views.find((v) => v.name === cfg.summaryViewName);
+
+        if (existing) {
+          api.logger.info?.(
+            `redis-memory: using existing summary view "${cfg.summaryViewName}" (id: ${existing.id})`,
+          );
+          return existing.id;
+        }
+
+        const filters: Record<string, unknown> = {};
+        if (cfg.namespace) {
+          filters.namespace = cfg.namespace;
+        }
+
+        const newView = await client.createSummaryView({
+          name: cfg.summaryViewName,
+          source: "long_term",
+          group_by: cfg.summaryGroupBy ?? ["user_id"],
+          filters: Object.keys(filters).length > 0 ? filters : undefined,
+          time_window_days: cfg.summaryTimeWindowDays,
+          continuous: false,
+          prompt:
+            "Summarize key facts, preferences, decisions, and important context about the user. " +
+            "Focus on information that would be useful for future conversations. " +
+            "Be concise but comprehensive.",
+        });
+
+        api.logger.info?.(
+          `redis-memory: created summary view "${cfg.summaryViewName}" (id: ${newView.id})`,
+        );
+        return newView.id;
+      } catch (err) {
+        api.logger.warn(`redis-memory: failed to initialize summary view: ${String(err)}`);
+        return null;
+      }
+    }
+
+    // ========================================================================
+    // Session Tracking
+    // ========================================================================
+
+    /**
+     * Get the working memory session ID.
+     *
+     * Priority:
+     * 1. Config override (workingMemorySessionId) - for fixed continuous sessions
+     * 2. Try to read sessionId from OpenClaw session store -> sessionKey:sessionId
+     * 3. Fall back to sessionKey only -> continuous session across resets
+     *
+     * When we can't get the sessionId, we use sessionKey only, which means
+     * the working memory is continuous across session resets. The server
+     * will auto-compact/summarize over time.
+     */
+    function getWorkingMemorySessionId(sessionKey: string): string {
+      // 1. Config override takes priority
+      if (cfg.workingMemorySessionId) {
+        return cfg.workingMemorySessionId;
+      }
+
+      // 2. Try to read sessionId from OpenClaw session store
+      const sessionId = readSessionIdFromStore(sessionKey);
+      if (sessionId) {
+        return `${sessionKey}:${sessionId}`;
+      }
+
+      // 3. Fall back to sessionKey only (continuous session)
+      return sessionKey;
+    }
+
+    // ========================================================================
+    // Lifecycle Hooks
+    // ========================================================================
+
+    // Auto-recall: inject rolling summary + query-specific memories before agent starts
+    if (cfg.autoRecall) {
+      api.on("before_agent_start", async (event, ctx) => {
+        const e = event as { prompt?: string };
+        if (!e.prompt || e.prompt.length < 5) return;
+
+        const sessionKey = ctx?.sessionKey ?? "default";
+
+        // Get the working memory session ID (includes sessionId from session store)
+        // This also detects and handles session resets automatically
+        const sessionId = getWorkingMemorySessionId(sessionKey);
+        try {
+          const wm = await client.getWorkingMemory(sessionId, {
+            namespace: cfg.namespace,
+          });
+          if (wm && wm.messages && wm.messages.length > 0) {
+            const maxTs = Math.max(
+              ...wm.messages.map((m) => (m.created_at ? new Date(m.created_at).getTime() : 0)),
+            );
+            sessionMaxTimestamps.set(sessionId, maxTs);
+          } else {
+            sessionMaxTimestamps.delete(sessionId);
+          }
+        } catch (err) {
+          // New session or error - no existing messages
+          sessionMaxTimestamps.delete(sessionId);
+        }
+
+        const contextParts: string[] = [];
+
+        // 1. Try to get the cached summary from the summary view
+        if (summaryViewId) {
+          try {
+            const partitions = await client.listSummaryViewPartitions(summaryViewId, {
+              namespace: cfg.namespace,
+              userId: cfg.userId,
+            });
+
+            const partition =
+              partitions.find((p) => {
+                const groupBy = cfg.summaryGroupBy ?? ["user_id"];
+                for (const field of groupBy) {
+                  if (field === "user_id" && p.group.user_id !== cfg.userId) return false;
+                  if (field === "namespace" && p.group.namespace !== cfg.namespace) return false;
+                }
+                return true;
+              }) ?? partitions[0];
+
+            if (partition && partition.summary && partition.memory_count > 0) {
+              contextParts.push(
+                `<user-summary computed="${partition.computed_at ?? "unknown"}" memories="${partition.memory_count}">\n${partition.summary}\n</user-summary>`,
+              );
+              api.logger.info?.(
+                `redis-memory: injecting summary (${partition.memory_count} memories)`,
+              );
+            }
+          } catch (err) {
+            if (err instanceof MemoryNotFoundError) {
+              api.logger.info?.("redis-memory: summary view not found, re-creating...");
+              summaryViewId = await ensureSummaryView();
+            } else {
+              api.logger.debug?.(`redis-memory: summary view fetch failed: ${String(err)}`);
+            }
+          }
+        }
+
+        // 2. Semantic search for query-specific memories
+        try {
+          const searchQuery = stripEnvelopeForSearch(e.prompt);
+          if (searchQuery && searchQuery.length >= 5) {
+            const distanceThreshold = cfg.minScore !== undefined ? 1 - cfg.minScore : undefined;
+
+            const results = await client.searchLongTermMemory({
+              text: searchQuery,
+              limit: cfg.recallLimit,
+              namespace: cfg.namespace ? { eq: cfg.namespace } : undefined,
+              userId: cfg.userId ? { eq: cfg.userId } : undefined,
+              distanceThreshold,
+            });
+
+            if (results.memories.length > 0) {
+              const filtered = results.memories
+                .map((m) => ({
+                  id: m.id,
+                  text: m.text,
+                  score: Math.max(0, 1 - (m.dist ?? 0)),
+                }))
+                .filter((r) => r.score >= (cfg.minScore ?? 0.3));
+
+              if (filtered.length > 0) {
+                const memoryList = filtered.map((r) => `- ${r.text}`).join("\n");
+                contextParts.push(
+                  `<relevant-memories query-specific="true">\n${memoryList}\n</relevant-memories>`,
+                );
+                api.logger.info?.(
+                  `redis-memory: injecting ${filtered.length} query-specific memories`,
+                );
+              }
+            }
+          }
+        } catch (err) {
+          api.logger.warn(`redis-memory: semantic search failed: ${String(err)}`);
+        }
+
+        if (contextParts.length === 0) return;
+
+        return {
+          prependContext: contextParts.join("\n\n"),
+        };
+      });
+    }
+
+    // Auto-capture: save conversation to working memory for background extraction
+    if (cfg.autoCapture) {
+      api.on("agent_end", async (event, ctx) => {
+        const e = event as { success?: boolean; messages?: unknown[] };
+
+        if (!e.success || !e.messages || e.messages.length === 0) {
+          return;
+        }
+
+        try {
+          const sessionKey = ctx?.sessionKey ?? `session-${Date.now()}`;
+
+          // Get the working memory session ID (includes sessionId from session store)
+          const workingMemorySessionId = getWorkingMemorySessionId(sessionKey);
+
+          const allMemoryMessages = convertToMemoryMessages(e.messages);
+          if (allMemoryMessages.length === 0) {
+            return;
+          }
+
+          // Filter to only messages newer than what we had at turn start
+          // Note: use workingMemorySessionId for tracking since that's what we used in before_agent_start
+          const cutoffTs = sessionMaxTimestamps.get(workingMemorySessionId) ?? 0;
+          const newMessages = allMemoryMessages.filter((m) => {
+            const msgTs = m.created_at ? new Date(m.created_at).getTime() : 0;
+            return msgTs > cutoffTs;
+          });
+
+          // Clean up tracking for this session
+          sessionMaxTimestamps.delete(workingMemorySessionId);
+
+          if (newMessages.length === 0) {
+            return;
+          }
+
+          const longTermMemoryStrategy = cfg.extractionStrategy
+            ? {
+                strategy: cfg.extractionStrategy,
+                config:
+                  cfg.extractionStrategy === "custom" && cfg.customPrompt
+                    ? { prompt: cfg.customPrompt }
+                    : {},
+              }
+            : undefined;
+
+          // Only include user_id if explicitly configured
+          await client.putWorkingMemory(workingMemorySessionId, {
+            messages: newMessages,
+            namespace: cfg.namespace,
+            ...(cfg.userId ? { user_id: cfg.userId } : {}),
+            long_term_memory_strategy: longTermMemoryStrategy,
+          });
+
+          // Trigger async summary view refresh (non-blocking)
+          if (summaryViewId) {
+            try {
+              const task = await client.runSummaryView(summaryViewId);
+              api.logger.debug?.(`redis-memory: triggered summary refresh (task: ${task.id})`);
+            } catch (refreshErr) {
+              if (refreshErr instanceof MemoryNotFoundError) {
+                api.logger.info?.("redis-memory: summary view not found, re-creating...");
+                summaryViewId = await ensureSummaryView();
+              } else {
+                api.logger.debug?.(
+                  `redis-memory: summary refresh trigger failed: ${String(refreshErr)}`,
+                );
+              }
+            }
+          }
+        } catch (err) {
+          api.logger.warn(`redis-memory: capture failed: ${String(err)}`);
+        }
+      });
+    }
+
+    // ========================================================================
+    // Service
+    // ========================================================================
+
+    api.registerService({
+      id: "redis-memory",
+      start: async () => {
+        try {
+          await client.healthCheck();
+          api.logger.info?.(
+            `redis-memory: connected to server (${cfg.serverUrl}, namespace: ${cfg.namespace ?? "default"})`,
+          );
+
+          // Initialize summary view
+          summaryViewId = await ensureSummaryView();
+        } catch (err) {
+          api.logger.warn(`redis-memory: server not reachable at ${cfg.serverUrl}: ${String(err)}`);
+        }
+      },
+      stop: () => {
+        api.logger.info?.("redis-memory: stopped");
+      },
+    });
+  },
+};
+
+export default redisMemoryPlugin;
+
+// Re-export config for convenience
+export { memoryConfigSchema, parseMemoryConfig } from "./config.js";
+export type { MemoryConfig, MemoryStrategy, SummaryGroupByField } from "./config.js";
