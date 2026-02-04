@@ -332,6 +332,12 @@ export function formatAssistantErrorText(
     }
   }
 
+  // Check rate limit before context overflow to avoid misclassification
+  // (some rate limit errors may contain patterns that match context overflow)
+  if (isRateLimitErrorMessage(raw) || isOverloadedErrorMessage(raw)) {
+    return "The AI service is temporarily overloaded. Please try again in a moment.";
+  }
+
   if (isContextOverflowError(raw)) {
     return (
       "Context overflow: prompt too large for the model. " +
@@ -362,10 +368,6 @@ export function formatAssistantErrorText(
   const invalidRequest = raw.match(/"type":"invalid_request_error".*?"message":"([^"]+)"/);
   if (invalidRequest?.[1]) {
     return `LLM request rejected: ${invalidRequest[1]}`;
-  }
-
-  if (isOverloadedErrorMessage(raw)) {
-    return "The AI service is temporarily overloaded. Please try again in a moment.";
   }
 
   if (isLikelyHttpErrorText(raw) || isRawApiErrorPayload(raw)) {
