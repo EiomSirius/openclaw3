@@ -1,4 +1,6 @@
 import { Type } from "@sinclair/typebox";
+import fs from "node:fs";
+import path from "node:path";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AnyAgentTool } from "./common.js";
 import { resolveAgentDir } from "../../agents/agent-scope.js";
@@ -28,6 +30,8 @@ import {
   updateSessionStore,
 } from "../../config/sessions.js";
 import { loadCombinedSessionStoreForGateway } from "../../gateway/session-utils.js";
+import { resolveCommitHash } from "../../infra/git-commit.js";
+import { resolveOpenClawPackageRoot } from "../../infra/openclaw-root.js";
 import {
   formatUsageWindowSummary,
   loadProviderUsageSummary,
@@ -430,6 +434,22 @@ export function createSessionStatusTool(opts?: {
         typeof agentDefaults.model === "object" && agentDefaults.model
           ? { ...agentDefaults.model, primary: defaultLabel }
           : { primary: defaultLabel };
+      let versionOverride: string | undefined;
+      let commitOverride: string | null | undefined;
+      const openclawRoot = await resolveOpenClawPackageRoot({
+        cwd: process.cwd(),
+        argv1: process.argv[1],
+      });
+      if (openclawRoot) {
+        try {
+          const pkgPath = path.join(openclawRoot, "package.json");
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as { version?: string };
+          if (typeof pkg.version === "string") versionOverride = pkg.version;
+          commitOverride = resolveCommitHash({ cwd: openclawRoot });
+        } catch {
+          // keep overrides undefined
+        }
+      }
       const statusText = buildStatusMessage({
         config: cfg,
         agent: {
@@ -456,6 +476,8 @@ export function createSessionStatusTool(opts?: {
           showDetails: queueOverrides,
         },
         includeTranscriptUsage: false,
+        versionOverride,
+        commitOverride: commitOverride ?? undefined,
       });
 
       return {

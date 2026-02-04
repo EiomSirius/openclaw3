@@ -71,6 +71,10 @@ type StatusArgs = {
   subagentsLine?: string;
   includeTranscriptUsage?: boolean;
   now?: number;
+  /** Override version shown in status (e.g. from OpenClaw package root at runtime). */
+  versionOverride?: string;
+  /** Override commit hash shown in status (e.g. from OpenClaw repo at runtime). */
+  commitOverride?: string;
 };
 
 function resolveRuntimeLabel(
@@ -458,8 +462,9 @@ export function buildStatusMessage(args: StatusArgs): string {
   const modelLabel = model ? `${provider}/${model}` : "unknown";
   const authLabel = authLabelValue ? ` · 🔑 ${authLabelValue}` : "";
   const modelLine = `🧠 Model: ${modelLabel}${authLabel}`;
-  const commit = resolveCommitHash();
-  const versionLine = `🦞 OpenClaw ${VERSION}${commit ? ` (${commit})` : ""}`;
+  const version = args.versionOverride ?? VERSION;
+  const commit = args.commitOverride ?? resolveCommitHash();
+  const versionLine = `🦞 OpenClaw ${version}${commit ? ` (${commit})` : ""}`;
   const usagePair = formatUsagePair(inputTokens, outputTokens);
   const costLine = costLabel ? `💵 Cost: ${costLabel}` : null;
   const usageCostLine =

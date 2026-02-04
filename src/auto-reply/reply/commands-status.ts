@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry, SessionScope } from "../../config/sessions.js";
 import type { MediaUnderstandingDecision } from "../../media-understanding/types.js";
@@ -22,6 +24,8 @@ import {
   resolveMainSessionAlias,
 } from "../../agents/tools/sessions-helpers.js";
 import { logVerbose } from "../../globals.js";
+import { resolveCommitHash } from "../../infra/git-commit.js";
+import { resolveOpenClawPackageRoot } from "../../infra/openclaw-root.js";
 import {
   formatUsageWindowSummary,
   loadProviderUsageSummary,
@@ -209,6 +213,22 @@ export async function buildStatusReply(params: {
     ? (normalizeGroupActivation(sessionEntry?.groupActivation) ?? defaultGroupActivation())
     : undefined;
   const agentDefaults = cfg.agents?.defaults ?? {};
+  let versionOverride: string | undefined;
+  let commitOverride: string | null | undefined;
+  const openclawRoot = await resolveOpenClawPackageRoot({
+    cwd: process.cwd(),
+    argv1: process.argv[1],
+  });
+  if (openclawRoot) {
+    try {
+      const pkgPath = path.join(openclawRoot, "package.json");
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as { version?: string };
+      if (typeof pkg.version === "string") versionOverride = pkg.version;
+      commitOverride = resolveCommitHash({ cwd: openclawRoot });
+    } catch {
+      // keep overrides undefined; status will use default VERSION/commit
+    }
+  }
   const statusText = buildStatusMessage({
     config: cfg,
     agent: {
@@ -243,6 +263,8 @@ export async function buildStatusReply(params: {
     subagentsLine,
     mediaDecisions: params.mediaDecisions,
     includeTranscriptUsage: false,
+    versionOverride,
+    commitOverride: commitOverride ?? undefined,
   });
 
   return { text: statusText };
