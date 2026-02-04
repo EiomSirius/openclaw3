@@ -72,7 +72,14 @@ function splitToolExecuteArgs(args: ToolExecuteArgsAny): {
       signal,
     };
   }
-  const [toolCallId, params, onUpdate, _ctx, signal] = args;
+  // Cast to unknown array to work around TypeScript type inference limitations
+  const [toolCallId, params, onUpdate, _ctx, signal] = args as unknown as [
+    string,
+    unknown,
+    AgentToolUpdateCallback<unknown> | undefined,
+    unknown,
+    AbortSignal | undefined,
+  ];
   return {
     toolCallId,
     params,
