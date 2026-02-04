@@ -43,6 +43,7 @@ import {
   resolveCompactionReserveTokensFloor,
 } from "../../pi-settings.js";
 import { toClientToolDefinitions } from "../../pi-tool-definition-adapter.js";
+import { wrapToolsWithHooks, wrapToolDefinitionsWithHooks } from "../../pi-tools.hooks.js";
 import { createOpenClawCodingTools } from "../../pi-tools.js";
 import { resolveSandboxContext } from "../../sandbox.js";
 import { resolveSandboxRuntimeStatus } from "../../sandbox/runtime-status.js";
@@ -447,6 +448,10 @@ export async function runEmbeddedAttempt(
         model: params.model,
       });
 
+      // Get hook runner once for tool-call hooks, before_agent_start, and agent_end
+      const hookRunner = getGlobalHookRunner();
+      const hookAgentId = params.sessionKey?.split(":")[0] ?? "main";
+
       const { builtInTools, customTools } = splitSdkTools({
         tools,
         sandboxEnabled: !!sandbox?.enabled,
@@ -469,6 +474,15 @@ export async function runEmbeddedAttempt(
 
       const allCustomTools = [...customTools, ...clientToolDefs];
 
+      // Wrap tools with before_tool_call / after_tool_call plugin hooks
+      const hookCtx = { agentId: hookAgentId, sessionKey: params.sessionKey };
+      const hookedBuiltInTools = hookRunner
+        ? wrapToolsWithHooks(builtInTools, hookRunner, hookCtx)
+        : builtInTools;
+      const hookedCustomTools = hookRunner
+        ? wrapToolDefinitionsWithHooks(allCustomTools, hookRunner, hookCtx)
+        : allCustomTools;
+
       ({ session } = await createAgentSession({
         cwd: resolvedWorkspace,
         agentDir,
@@ -476,8 +490,8 @@ export async function runEmbeddedAttempt(
         modelRegistry: params.modelRegistry,
         model: params.model,
         thinkingLevel: mapThinkingLevel(params.thinkLevel),
-        tools: builtInTools,
-        customTools: allCustomTools,
+        tools: hookedBuiltInTools,
+        customTools: hookedCustomTools,
         sessionManager,
         settingsManager,
       }));
@@ -699,9 +713,6 @@ export async function runEmbeddedAttempt(
         }
       }
 
-      // Get hook runner once for both before_agent_start and agent_end hooks
-      const hookRunner = getGlobalHookRunner();
-
       let promptError: unknown = null;
       try {
         const promptStartedAt = Date.now();
@@ -716,7 +727,7 @@ export async function runEmbeddedAttempt(
                 messages: activeSession.messages,
               },
               {
-                agentId: params.sessionKey?.split(":")[0] ?? "main",
+                agentId: hookAgentId,
                 sessionKey: params.sessionKey,
                 workspaceDir: params.workspaceDir,
                 messageProvider: params.messageProvider ?? undefined,
@@ -846,7 +857,7 @@ export async function runEmbeddedAttempt(
                 durationMs: Date.now() - promptStartedAt,
               },
               {
-                agentId: params.sessionKey?.split(":")[0] ?? "main",
+                agentId: hookAgentId,
                 sessionKey: params.sessionKey,
                 workspaceDir: params.workspaceDir,
                 messageProvider: params.messageProvider ?? undefined,
