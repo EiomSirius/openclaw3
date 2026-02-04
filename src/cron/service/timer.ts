@@ -53,7 +53,7 @@ export async function runDueJobs(state: CronServiceState) {
   }
   const now = state.deps.nowMs();
   const due = state.store.jobs.filter((j) => {
-    if (!j.enabled) {
+    if (j.enabled === false) {
       return false;
     }
     if (typeof j.state.runningAtMs === "number") {
@@ -101,7 +101,7 @@ export async function executeJob(
         // One-shot job completed successfully; disable it.
         job.enabled = false;
         job.state.nextRunAtMs = undefined;
-      } else if (job.enabled) {
+      } else if (job.enabled !== false) {
         job.state.nextRunAtMs = computeJobNextRunAtMs(job, endedAt);
       } else {
         job.state.nextRunAtMs = undefined;
@@ -224,7 +224,7 @@ export async function executeJob(
     await finish("error", String(err));
   } finally {
     job.updatedAtMs = nowMs;
-    if (!opts.forced && job.enabled && !deleted) {
+    if (!opts.forced && job.enabled !== false && !deleted) {
       // Keep nextRunAtMs in sync in case the schedule advanced during a long run.
       job.state.nextRunAtMs = computeJobNextRunAtMs(job, state.deps.nowMs());
     }

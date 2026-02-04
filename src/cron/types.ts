@@ -67,7 +67,8 @@ export type CronJob = {
   agentId?: string;
   name: string;
   description?: string;
-  enabled: boolean;
+  /** Defaults to true when undefined. */
+  enabled?: boolean;
   deleteAfterRun?: boolean;
   createdAtMs: number;
   updatedAtMs: number;
