@@ -6,6 +6,7 @@ import { locked } from "./locked.js";
 import { ensureLoaded, persist } from "./store.js";
 
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 export function armTimer(state: CronServiceState) {
   if (state.timer) {
@@ -59,6 +60,10 @@ export async function runDueJobs(state: CronServiceState) {
     if (typeof j.state.runningAtMs === "number") {
       return false;
     }
+    // Skip jobs that are in exponential backoff
+    if (typeof j.state.backoffUntilMs === "number" && now < j.state.backoffUntilMs) {
+      return false;
+    }
     const next = j.state.nextRunAtMs;
     return typeof next === "number" && now >= next;
   });
@@ -92,6 +97,55 @@ export async function executeJob(
     job.state.lastStatus = status;
     job.state.lastDurationMs = Math.max(0, endedAt - startedAt);
     job.state.lastError = err;
+
+    // Track consecutive failures and disable job if limit exceeded
+    if (status === "error") {
+      job.state.consecutiveFailures = (job.state.consecutiveFailures ?? 0) + 1;
+
+      if (job.state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        job.enabled = false;
+        job.state.nextRunAtMs = undefined;
+        state.deps.log.error(
+          { jobId: job.id, failures: job.state.consecutiveFailures },
+          `Cron job "${job.name}" disabled after ${MAX_CONSECUTIVE_FAILURES} consecutive failures`,
+        );
+        emit(state, {
+          jobId: job.id,
+          action: "finished",
+          status,
+          error: `Auto-disabled after ${MAX_CONSECUTIVE_FAILURES} consecutive failures`,
+          summary,
+          runAtMs: startedAt,
+          durationMs: job.state.lastDurationMs,
+          nextRunAtMs: undefined,
+        });
+        // Post failure notification to main session
+        if (job.sessionTarget === "isolated") {
+          const prefix = job.isolation?.postToMainPrefix?.trim() || "Cron";
+          state.deps.enqueueSystemEvent(
+            `${prefix} (auto-disabled): Job "${job.name}" failed ${MAX_CONSECUTIVE_FAILURES} times and has been disabled.`,
+            { agentId: job.agentId },
+          );
+          if (job.wakeMode === "now") {
+            state.deps.requestHeartbeatNow({ reason: `cron:${job.id}:disabled` });
+          }
+        }
+        return; // Early return - job is now disabled
+      }
+
+      // Apply exponential backoff for isolated tasks
+      if (job.sessionTarget === "isolated") {
+        const backoffDelayMs = Math.min(
+          1000 * 2 ** (job.state.consecutiveFailures - 1),
+          3600000, // Max 1 hour
+        );
+        job.state.backoffUntilMs = endedAt + backoffDelayMs;
+      }
+    } else if (status === "ok") {
+      // Reset failure counter on success
+      job.state.consecutiveFailures = 0;
+      job.state.backoffUntilMs = undefined;
+    }
 
     const shouldDelete =
       job.schedule.kind === "at" && status === "ok" && job.deleteAfterRun === true;

@@ -80,10 +80,18 @@ export function nextWakeAtMs(state: CronServiceState) {
   if (enabled.length === 0) {
     return undefined;
   }
-  return enabled.reduce(
-    (min, j) => Math.min(min, j.state.nextRunAtMs as number),
-    enabled[0].state.nextRunAtMs as number,
-  );
+  // Consider both nextRunAtMs and backoffUntilMs when calculating next wake time
+  let minWakeTime = enabled[0].state.nextRunAtMs as number;
+  for (const job of enabled) {
+    const nextRun = job.state.nextRunAtMs as number;
+    // If job has a backoff, wake at the later of nextRun or backoff expiry
+    const effectiveWakeTime =
+      typeof job.state.backoffUntilMs === "number"
+        ? Math.max(nextRun, job.state.backoffUntilMs)
+        : nextRun;
+    minWakeTime = Math.min(minWakeTime, effectiveWakeTime);
+  }
+  return minWakeTime;
 }
 
 export function createJob(state: CronServiceState, input: CronJobCreate): CronJob {
