@@ -253,14 +253,14 @@ Triggered during session lifecycle when session persistence is enabled (requires
 Triggered during agent execution when session persistence is enabled (requires a valid `sessionKey`):
 
 - **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
-- **`agent:reply`**: After each agent turn completes (fires even when output is empty; hooks may add messages)
+- **`agent:reply`**: After each agent turn completes with user input or assistant output (requires at least one of `input` or `output` to be non-empty; does not fire for completely empty turns; hooks may add messages)
 - **`agent:flush`**: When memory flush is triggered (context nearing token limit)
 
 **Context for `agent:reply` includes**:
 
 - `sessionId`: Current session ID
-- `input`: User's input message
-- `output`: Assistant's response (may be empty string)
+- `input`: User's input message (may be empty string when only output is present)
+- `output`: Assistant's response (may be empty string when only input is present)
 - `turnId`: Unique turn identifier
 - `senderId`: ID of the message sender
 
@@ -269,7 +269,7 @@ Triggered during agent execution when session persistence is enabled (requires a
 **Context for `agent:flush` includes**:
 
 - `sessionId`: Current session ID
-- `contextTokensUsed`: Number of context tokens currently used
+- `contextTokensUsed` (optional): Last persisted token count that triggered the flush (best-effort; omitted if unavailable)
 - `reason`: Reason for flush (e.g., "context_limit")
 
 ### Gateway Events

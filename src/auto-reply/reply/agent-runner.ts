@@ -528,6 +528,7 @@ export async function runReplyAgent(params: {
           sessionId: followupRun.run.sessionId,
         });
         await triggerInternalHook(hookEvent);
+        activeIsNewSession = false;
 
         // Prepend session:start hook messages if present
         if (hookEvent.messages.length > 0) {
@@ -614,6 +615,7 @@ export async function runReplyAgent(params: {
           sessionId: followupRun.run.sessionId,
         });
         await triggerInternalHook(hookEvent);
+        activeIsNewSession = false;
 
         // Prepend session:start hook messages if present
         if (hookEvent.messages.length > 0) {
@@ -772,6 +774,7 @@ export async function runReplyAgent(params: {
         sessionId: followupRun.run.sessionId,
       });
       await triggerInternalHook(hookEvent);
+      activeIsNewSession = false;
 
       // Prepend session:start hook messages if present
       if (hookEvent.messages.length > 0) {

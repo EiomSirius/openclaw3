@@ -87,13 +87,15 @@ export async function runMemoryFlushIfNeeded(params: {
   let flushHookMessages: string[] = [];
   if (params.sessionKey) {
     // Report the same totalTokens that triggered shouldRunMemoryFlush decision.
-    // This is the last persisted token count; should always be valid when flush fires.
-    const contextTokensUsed = entryForFlush?.totalTokens ?? 0;
-    const hookEvent = createInternalHookEvent("agent", "flush", params.sessionKey, {
+    // Omit contextTokensUsed if not available rather than defaulting to 0.
+    const context: Record<string, unknown> = {
       sessionId: params.followupRun.run.sessionId,
-      contextTokensUsed,
       reason: "context_limit",
-    });
+    };
+    if (entryForFlush?.totalTokens !== undefined) {
+      context.contextTokensUsed = entryForFlush.totalTokens;
+    }
+    const hookEvent = createInternalHookEvent("agent", "flush", params.sessionKey, context);
     await triggerInternalHook(hookEvent);
     flushHookMessages = hookEvent.messages;
   }
