@@ -23,7 +23,12 @@ export function createGatewayPluginRequestHandler(params: {
 
     if (routes.length > 0) {
       const url = new URL(req.url ?? "/", "http://localhost");
-      const route = routes.find((entry) => entry.path === url.pathname);
+      const route = routes.find(
+        (entry) =>
+          entry.path === url.pathname ||
+          (url.pathname.startsWith(entry.path) &&
+            (entry.path.endsWith("/") || url.pathname[entry.path.length] === "/")),
+      );
       if (route) {
         try {
           await route.handler(req, res);

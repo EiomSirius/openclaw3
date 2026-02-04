@@ -1,0 +1,14 @@
+{
+  "name": "@openclaw/dify-auth",
+  "version": "1.0.0",
+  "description": "OpenClaw Dify Auth provider plugin",
+  "type": "module",
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

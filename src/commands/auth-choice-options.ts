@@ -21,6 +21,7 @@ export type AuthChoiceGroupId =
   | "minimax"
   | "synthetic"
   | "venice"
+  | "dify"
   | "qwen";
 
 export type AuthChoiceGroup = {
@@ -77,6 +78,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     label: "Qwen",
     hint: "OAuth",
     choices: ["qwen-portal"],
+  },
+  {
+    value: "dify",
+    label: "dify",
+    hint: "API key (Chatflow/Agent)",
+    choices: ["dify-api-key"],
   },
   {
     value: "zai",
@@ -181,6 +188,7 @@ export function buildAuthChoiceOptions(params: {
     hint: "Oauth plugin for MiniMax",
   });
   options.push({ value: "qwen-portal", label: "Qwen OAuth" });
+  options.push({ value: "dify-api-key", label: "Dify API key" });
   options.push({
     value: "copilot-proxy",
     label: "Copilot Proxy (local)",

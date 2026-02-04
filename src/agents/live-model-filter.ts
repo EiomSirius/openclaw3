@@ -64,6 +64,10 @@ export function isModernModelRef(ref: ModelRef): boolean {
     return matchesPrefix(id, MINIMAX_PREFIXES);
   }
 
+  if (provider === "dify") {
+    return true;
+  }
+
   if (provider === "xai") {
     return matchesPrefix(id, XAI_PREFIXES);
   }

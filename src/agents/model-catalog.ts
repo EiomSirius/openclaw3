@@ -95,10 +95,27 @@ export async function loadModelCatalog(params?: {
         models.push({ id, name, provider, contextWindow, reasoning, input });
       }
 
-      if (models.length === 0) {
+      const discoveredCount = models.length;
+      if (discoveredCount === 0) {
         // If we found nothing, don't cache this result so we can try again.
         modelCatalogPromise = null;
       }
+
+      // Inject Dify models
+      models.push({
+        id: "chat-flow",
+        name: "Dify ChatFlow",
+        provider: "dify",
+        contextWindow: 4096,
+        input: ["text", "image"],
+      });
+      models.push({
+        id: "agent",
+        name: "Dify Agent",
+        provider: "dify",
+        contextWindow: 4096,
+        input: ["text", "image"],
+      });
 
       return sortModels(models);
     } catch (error) {
