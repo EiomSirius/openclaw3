@@ -289,7 +289,8 @@ export function createOpenClawCodingTools(options?: {
           containerName: sandbox.containerName,
           workspaceDir: sandbox.workspaceDir,
           containerWorkdir: sandbox.containerWorkdir,
-          env: sandbox.docker.env,
+          env: sandbox.backend === "microvm" ? sandbox.microvm?.env : sandbox.docker.env,
+          backend: sandbox.backend,
         }
       : undefined,
   });
