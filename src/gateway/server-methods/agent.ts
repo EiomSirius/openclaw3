@@ -84,6 +84,7 @@ export const agentHandlers: GatewayRequestHandlers = {
       timeout?: number;
       label?: string;
       spawnedBy?: string;
+      model?: string;
     };
     const cfg = loadConfig();
     const idem = request.idempotencyKey;
@@ -383,6 +384,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         runId,
         lane: request.lane,
         extraSystemPrompt: request.extraSystemPrompt,
+        model: request.model?.trim() || undefined,
       },
       defaultRuntime,
       context.deps,

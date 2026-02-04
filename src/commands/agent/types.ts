@@ -74,4 +74,6 @@ export type AgentCommandOpts = {
   extraSystemPrompt?: string;
   /** Per-call stream param overrides (best-effort). */
   streamParams?: AgentStreamParams;
+  /** Model override for this agent run (provider/model format). */
+  model?: string;
 };

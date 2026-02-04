@@ -76,6 +76,22 @@ function makeToolPolicyMatcher(policy: SandboxToolPolicy) {
   };
 }
 
+/**
+ * Default tools DENIED to subagents.
+ *
+ * Tools NOT in this list are ALLOWED to subagents, including:
+ * - browser (browser automation - see #8157)
+ * - web_search, web_fetch (information gathering)
+ * - image, canvas, tts (content creation)
+ * - nodes (node discovery/status)
+ * - apply_patch (code modifications)
+ * - message (sending replies)
+ * - read, write, edit, glob, grep (file operations)
+ * - exec, process (shell commands - subject to sandbox policy)
+ *
+ * To customize subagent tool access, configure `tools.subagents.tools.allow`
+ * or `tools.subagents.tools.deny` in openclaw.json.
+ */
 const DEFAULT_SUBAGENT_TOOL_DENY = [
   // Session management - main agent orchestrates
   "sessions_list",

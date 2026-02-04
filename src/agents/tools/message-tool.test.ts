@@ -47,7 +47,8 @@ describe("message tool agent routing", () => {
 
     const call = mocks.runMessageAction.mock.calls[0]?.[0];
     expect(call?.agentId).toBe("alpha");
-    expect(call?.sessionKey).toBeUndefined();
+    // sessionKey is now passed to prevent routing leaks (#8154)
+    expect(call?.sessionKey).toBe("agent:alpha:main");
   });
 });
 

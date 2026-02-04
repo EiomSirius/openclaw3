@@ -752,6 +752,9 @@ async function handleSendAction(ctx: ResolvedActionContext): Promise<MessageActi
       channel,
       accountId,
       route: outboundRoute,
+      // Pass the requester's session key to prevent corrupting the original conversation's
+      // deliveryContext when sending outbound messages. See #8154.
+      requesterSessionKey: input.sessionKey,
     });
   }
   const mirrorMediaUrls =

@@ -242,6 +242,8 @@ export function createSessionsSpawnTool(opts?: {
             groupId: opts?.agentGroupId ?? undefined,
             groupChannel: opts?.agentGroupChannel ?? undefined,
             groupSpace: opts?.agentGroupSpace ?? undefined,
+            // Pass model directly to avoid race condition with sessions.patch
+            model: resolvedModel,
           },
           timeoutMs: 10_000,
         });

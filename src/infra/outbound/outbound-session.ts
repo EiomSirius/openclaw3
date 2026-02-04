@@ -958,7 +958,22 @@ export async function ensureOutboundSessionEntry(params: {
   channel: ChannelId;
   accountId?: string | null;
   route: OutboundSessionRoute;
+  /** The session key of the original conversation (to prevent accidental corruption). */
+  requesterSessionKey?: string;
 }): Promise<void> {
+  // Safety check: do not update the original session when sending outbound messages.
+  // This prevents the message tool from corrupting the original conversation's deliveryContext.
+  // See: https://github.com/openclaw/openclaw/issues/8154
+  if (
+    params.requesterSessionKey &&
+    params.route.sessionKey.toLowerCase() === params.requesterSessionKey.toLowerCase()
+  ) {
+    // Outbound route resolved to the same session as the requester.
+    // This can happen with certain identity linking configurations.
+    // Skip the session update to prevent deliveryContext corruption.
+    return;
+  }
+
   const storePath = resolveStorePath(params.cfg.session?.store, {
     agentId: params.agentId,
   });
