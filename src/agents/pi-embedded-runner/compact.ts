@@ -1,5 +1,6 @@
 import {
   createAgentSession,
+  DefaultResourceLoader,
   estimateTokens,
   SessionManager,
   SettingsManager,
@@ -380,14 +381,24 @@ export async function compactEmbeddedPiSessionDirect(
         settingsManager,
         minReserveTokens: resolveCompactionReserveTokensFloor(params.config),
       });
-      // Call for side effects (sets compaction/pruning runtime state)
-      buildEmbeddedExtensionPaths({
+      // Build extension paths and set runtime state for compaction/pruning
+      const additionalExtensionPaths = buildEmbeddedExtensionPaths({
         cfg: params.config,
         sessionManager,
         provider,
         modelId,
         model,
       });
+
+      // Create resource loader with extension paths so compaction-safeguard extension loads
+      const resourceLoader = new DefaultResourceLoader({
+        cwd: effectiveWorkspace,
+        agentDir,
+        settingsManager,
+        additionalExtensionPaths,
+        noSkills: true,
+      });
+      await resourceLoader.reload();
 
       const { builtInTools, customTools } = splitSdkTools({
         tools,
@@ -405,6 +416,7 @@ export async function compactEmbeddedPiSessionDirect(
         customTools,
         sessionManager,
         settingsManager,
+        resourceLoader,
       });
       applySystemPromptOverrideToSession(session, systemPromptOverride());
 
