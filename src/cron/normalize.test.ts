@@ -110,4 +110,33 @@ describe("normalizeCronJobCreate", () => {
     expect(schedule.kind).toBe("at");
     expect(schedule.atMs).toBe(Date.parse("2026-01-12T18:00:00Z"));
   });
+
+  it("defaults enabled to true when not provided", () => {
+    const normalized = normalizeCronJobCreate({
+      name: "no-enabled",
+      schedule: { kind: "cron", expr: "*/5 * * * *" },
+      sessionTarget: "isolated",
+      payload: {
+        kind: "agentTurn",
+        message: "test",
+      },
+    }) as unknown as Record<string, unknown>;
+
+    expect(normalized.enabled).toBe(true);
+  });
+
+  it("respects explicit enabled: false", () => {
+    const normalized = normalizeCronJobCreate({
+      name: "explicit-disabled",
+      enabled: false,
+      schedule: { kind: "cron", expr: "*/5 * * * *" },
+      sessionTarget: "isolated",
+      payload: {
+        kind: "agentTurn",
+        message: "test",
+      },
+    }) as unknown as Record<string, unknown>;
+
+    expect(normalized.enabled).toBe(false);
+  });
 });
