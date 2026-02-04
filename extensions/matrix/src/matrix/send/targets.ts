@@ -70,8 +70,7 @@ async function resolveDirectRoomId(client: MatrixClient, userId: string): Promis
   }
 
   // 2) Fallback: look for an existing joined room that looks like a 1:1 with the user.
-  // Many clients only maintain m.direct for *their own* account data, so relying on it is brittle.
-  let fallbackRoom: string | null = null;
+  // Only use rooms with exactly 2 members (true DMs), don't fall back to group rooms.
   try {
     const rooms = await client.getJoinedRooms();
     for (const roomId of rooms) {
@@ -84,27 +83,30 @@ async function resolveDirectRoomId(client: MatrixClient, userId: string): Promis
       if (!members.includes(trimmed)) {
         continue;
       }
-      // Prefer classic 1:1 rooms, but allow larger rooms if requested.
+      // Only use classic 1:1 rooms (2 members), skip group rooms
       if (members.length === 2) {
         directRoomCache.set(trimmed, roomId);
         await persistDirectRoom(client, trimmed, roomId);
         return roomId;
       }
-      if (!fallbackRoom) {
-        fallbackRoom = roomId;
-      }
     }
   } catch {
-    // Ignore and fall back.
+    // Ignore and fall back to room creation.
   }
 
-  if (fallbackRoom) {
-    directRoomCache.set(trimmed, fallbackRoom);
-    await persistDirectRoom(client, trimmed, fallbackRoom);
-    return fallbackRoom;
+  // 3) Create a new DM room if none exists
+  try {
+    const roomId = await client.createRoom({
+      preset: "trusted_private_chat",
+      is_direct: true,
+      invite: [trimmed],
+    });
+    directRoomCache.set(trimmed, roomId);
+    await persistDirectRoom(client, trimmed, roomId);
+    return roomId;
+  } catch (createErr) {
+    throw new Error(`No direct room found for ${trimmed} and failed to create one: ${createErr}`)
   }
-
-  throw new Error(`No direct room found for ${trimmed} (m.direct missing)`);
 }
 
 export async function resolveMatrixRoomId(client: MatrixClient, raw: string): Promise<string> {
