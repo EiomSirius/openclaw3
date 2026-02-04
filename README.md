@@ -493,6 +493,17 @@ Special thanks to [Mario Zechner](https://mariozechner.at/) for his support and 
 [pi-mono](https://github.com/badlogic/pi-mono).
 Special thanks to Adam Doppelt for lobster.bot.
 
+## For Slack Users: Consider TwinDevBot
+
+If you're primarily using Slack, check out [TwinDevBot](https://github.com/hyeonseungk/twin-dev-bot) — a Slack-optimized alternative that currently offers a better UX for Slack workflows:
+
+- **Real-time progress updates**: Instead of waiting silently for Claude Code responses, TwinDevBot shows live emoji updates and progress indicators so you always know what's happening.
+- **Better question handling**: Multiple-choice questions are presented one at a time in a clean format, rather than as a wall of text.
+- **Button-based selection**: Choose options with a simple button tap, or type a custom response if you prefer.
+- **Native Slack organization**: Map projects to channels and tasks to threads, leveraging Slack's existing UI/UX and team collaboration features.
+
+## Community
+
 Thanks to all clawtributors:
 
 <p align="left">
