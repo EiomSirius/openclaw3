@@ -1,4 +1,5 @@
 import type { OpenClawConfig } from "../config/config.js";
+import { sleep } from "../utils.js";
 import type { FailoverReason } from "./pi-embedded-helpers.js";
 import {
   ensureAuthProfileStore,
@@ -19,6 +20,12 @@ import {
   resolveConfiguredModelRef,
   resolveModelRefFromString,
 } from "./model-selection.js";
+import {
+  decideRateLimitAction,
+  extractRateLimitInfo,
+  type RateLimitConfig,
+  type RateLimitDecision,
+} from "./rate-limit-handler.js";
 
 type ModelCandidate = {
   provider: string;
@@ -235,6 +242,8 @@ export async function runWithModelFallback<T>(params: {
     attempt: number;
     total: number;
   }) => void | Promise<void>;
+  /** Callback when rate limit requires user decision (strategy: "ask"). */
+  onRateLimitAsk?: (decision: RateLimitDecision & { info: { provider: string; model: string; retryAfterSeconds?: number } }) => Promise<"wait" | "switch">;
 }): Promise<{
   result: T;
   provider: string;
@@ -250,6 +259,7 @@ export async function runWithModelFallback<T>(params: {
   const authStore = params.cfg
     ? ensureAuthProfileStore(params.agentDir, { allowKeychainPrompt: false })
     : null;
+  const rateLimitConfig: RateLimitConfig | undefined = params.cfg?.agents?.defaults?.rateLimitStrategy;
   const attempts: FallbackAttempt[] = [];
   let lastError: unknown;
 
@@ -274,44 +284,87 @@ export async function runWithModelFallback<T>(params: {
         continue;
       }
     }
-    try {
-      const result = await params.run(candidate.provider, candidate.model);
-      return {
-        result,
-        provider: candidate.provider,
-        model: candidate.model,
-        attempts,
-      };
-    } catch (err) {
-      if (shouldRethrowAbort(err)) {
-        throw err;
-      }
-      const normalized =
-        coerceToFailoverError(err, {
+
+    // Allow retry loop for rate limit "wait" strategy
+    let retryCount = 0;
+    const maxRetries = 1; // Only retry once after waiting
+
+    while (retryCount <= maxRetries) {
+      try {
+        const result = await params.run(candidate.provider, candidate.model);
+        return {
+          result,
           provider: candidate.provider,
           model: candidate.model,
-        }) ?? err;
-      if (!isFailoverError(normalized)) {
-        throw err;
-      }
+          attempts,
+        };
+      } catch (err) {
+        if (shouldRethrowAbort(err)) {
+          throw err;
+        }
+        const normalized =
+          coerceToFailoverError(err, {
+            provider: candidate.provider,
+            model: candidate.model,
+          }) ?? err;
+        if (!isFailoverError(normalized)) {
+          throw err;
+        }
 
-      lastError = normalized;
-      const described = describeFailoverError(normalized);
-      attempts.push({
-        provider: candidate.provider,
-        model: candidate.model,
-        error: described.message,
-        reason: described.reason,
-        status: described.status,
-        code: described.code,
-      });
-      await params.onError?.({
-        provider: candidate.provider,
-        model: candidate.model,
-        error: normalized,
-        attempt: i + 1,
-        total: candidates.length,
-      });
+        // Check if this is a rate limit error and handle according to strategy
+        const rateLimitInfo = extractRateLimitInfo(err, {
+          provider: candidate.provider,
+          model: candidate.model,
+        });
+
+        if (rateLimitInfo && retryCount < maxRetries) {
+          const decision = decideRateLimitAction(rateLimitConfig, rateLimitInfo);
+
+          if (decision.action === "wait" && decision.waitSeconds !== undefined) {
+            // Wait and retry the same model
+            retryCount += 1;
+            await sleep(decision.waitSeconds * 1000);
+            continue; // Retry the same candidate
+          }
+
+          if (decision.action === "ask" && params.onRateLimitAsk) {
+            // Ask the user what to do
+            const userChoice = await params.onRateLimitAsk({
+              ...decision,
+              info: {
+                provider: candidate.provider,
+                model: candidate.model,
+                retryAfterSeconds: rateLimitInfo.retryAfterSeconds,
+              },
+            });
+            if (userChoice === "wait" && decision.waitSeconds !== undefined) {
+              retryCount += 1;
+              await sleep(decision.waitSeconds * 1000);
+              continue; // Retry the same candidate
+            }
+            // User chose "switch", fall through to normal fallback behavior
+          }
+        }
+
+        lastError = normalized;
+        const described = describeFailoverError(normalized);
+        attempts.push({
+          provider: candidate.provider,
+          model: candidate.model,
+          error: described.message,
+          reason: described.reason,
+          status: described.status,
+          code: described.code,
+        });
+        await params.onError?.({
+          provider: candidate.provider,
+          model: candidate.model,
+          error: normalized,
+          attempt: i + 1,
+          total: candidates.length,
+        });
+        break; // Move to next candidate
+      }
     }
   }
 
