@@ -18,8 +18,12 @@ import {
 } from "./constants.js";
 
 async function readJson(filePath: string): Promise<Record<string, unknown>> {
-  const raw = await fsp.readFile(filePath, "utf-8");
-  return JSON.parse(raw) as Record<string, unknown>;
+  try {
+    const raw = await fsp.readFile(filePath, "utf-8");
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(`Failed to read JSON from ${filePath}: ${String(err)}`);
+  }
 }
 
 describe("browser chrome profile decoration", () => {
