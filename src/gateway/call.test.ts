@@ -338,6 +338,62 @@ describe("callGateway password resolution", () => {
 
     expect(lastClientOptions?.password).toBe("from-env");
   });
+
+  it("does not use env/config password when non-local url override is set", async () => {
+    process.env.OPENCLAW_GATEWAY_PASSWORD = "from-env";
+    loadConfig.mockReturnValue({
+      gateway: {
+        mode: "local",
+        auth: { password: "from-config" },
+      },
+    });
+
+    await callGateway({ method: "health", url: "wss://override.example/ws" });
+
+    expect(lastClientOptions?.password).toBeUndefined();
+  });
+
+  it("uses env/config password when local url override is set", async () => {
+    process.env.OPENCLAW_GATEWAY_PASSWORD = "from-env";
+    loadConfig.mockReturnValue({
+      gateway: {
+        mode: "local",
+        auth: { password: "from-config" },
+      },
+    });
+
+    await callGateway({ method: "health", url: "ws://127.0.0.1:18789/ws" });
+
+    expect(lastClientOptions?.password).toBe("from-env");
+  });
+
+  it("uses env/config password when localhost url override is set", async () => {
+    process.env.OPENCLAW_GATEWAY_PASSWORD = "from-env";
+    loadConfig.mockReturnValue({
+      gateway: {
+        mode: "local",
+        auth: { password: "from-config" },
+      },
+    });
+
+    await callGateway({ method: "health", url: "ws://localhost:18789/ws" });
+
+    expect(lastClientOptions?.password).toBe("from-env");
+  });
+
+  it("uses env/config password when tailnet ip url override is set", async () => {
+    process.env.OPENCLAW_GATEWAY_PASSWORD = "from-env";
+    loadConfig.mockReturnValue({
+      gateway: {
+        mode: "local",
+        auth: { password: "from-config" },
+      },
+    });
+
+    await callGateway({ method: "health", url: "ws://100.100.100.100:18789/ws" });
+
+    expect(lastClientOptions?.password).toBe("from-env");
+  });
 });
 
 describe("callGateway token resolution", () => {
@@ -364,7 +420,7 @@ describe("callGateway token resolution", () => {
     }
   });
 
-  it("uses remote token when remote mode uses url override", async () => {
+  it("does not use env/config token when non-local url override is set", async () => {
     process.env.OPENCLAW_GATEWAY_TOKEN = "env-token";
     loadConfig.mockReturnValue({
       gateway: {
@@ -376,6 +432,51 @@ describe("callGateway token resolution", () => {
 
     await callGateway({ method: "health", url: "wss://override.example/ws" });
 
-    expect(lastClientOptions?.token).toBe("remote-token");
+    expect(lastClientOptions?.token).toBeUndefined();
+  });
+
+  it("uses explicit token when non-local url override is set", async () => {
+    loadConfig.mockReturnValue({
+      gateway: {
+        mode: "local",
+        auth: { token: "local-token" },
+      },
+    });
+
+    await callGateway({
+      method: "health",
+      url: "wss://override.example/ws",
+      token: "explicit-token",
+    });
+
+    expect(lastClientOptions?.token).toBe("explicit-token");
+  });
+
+  it("uses env/config token when local url override is set", async () => {
+    process.env.OPENCLAW_GATEWAY_TOKEN = "env-token";
+    loadConfig.mockReturnValue({
+      gateway: {
+        mode: "local",
+        auth: { token: "local-token" },
+      },
+    });
+
+    await callGateway({ method: "health", url: "ws://127.0.0.1:18789/ws" });
+
+    expect(lastClientOptions?.token).toBe("env-token");
+  });
+
+  it("uses env/config token when private ip url override is set", async () => {
+    process.env.OPENCLAW_GATEWAY_TOKEN = "env-token";
+    loadConfig.mockReturnValue({
+      gateway: {
+        mode: "local",
+        auth: { token: "local-token" },
+      },
+    });
+
+    await callGateway({ method: "health", url: "ws://192.168.1.100:18789/ws" });
+
+    expect(lastClientOptions?.token).toBe("env-token");
   });
 });

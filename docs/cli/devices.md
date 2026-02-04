@@ -61,6 +61,10 @@ openclaw devices revoke --device <deviceId> --role node
 - `--timeout <ms>`: RPC timeout.
 - `--json`: JSON output (recommended for scripting).
 
+Note: when you set `--url` to a non-local address, the CLI does not fall back to config/env
+credentials to prevent credential leakage. Pass `--token` or `--password` explicitly for
+remote targets. Local addresses (loopback, private IPs, tailnet) still use credential fallback.
+
 ## Notes
 
 - Token rotation returns a new token (sensitive). Treat it like a secret.

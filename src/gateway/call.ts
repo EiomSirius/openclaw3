@@ -7,6 +7,7 @@ import {
   resolveStateDir,
 } from "../config/config.js";
 import { loadOrCreateDeviceIdentity } from "../infra/device-identity.js";
+import { isPrivateIpAddress } from "../infra/net/ssrf.js";
 import { pickPrimaryTailnetIPv4 } from "../infra/tailnet.js";
 import { loadGatewayTlsRuntime } from "../infra/tls/gateway.js";
 import {
@@ -17,6 +18,24 @@ import {
 } from "../utils/message-channel.js";
 import { GatewayClient } from "./client.js";
 import { PROTOCOL_VERSION } from "./protocol/index.js";
+
+/**
+ * Returns true if the URL points to a local/private address where credential
+ * fallback is safe. Returns false for public/unknown URLs where we should
+ * require explicit credentials to prevent credential exfiltration.
+ */
+function isLocalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost") {
+      return true;
+    }
+    return isPrivateIpAddress(host);
+  } catch {
+    return false;
+  }
+}
 
 export type CallGatewayOptions = {
   url?: string;
@@ -118,6 +137,8 @@ export async function callGateway<T = Record<string, unknown>>(
   const remote = isRemoteMode ? config.gateway?.remote : undefined;
   const urlOverride =
     typeof opts.url === "string" && opts.url.trim().length > 0 ? opts.url.trim() : undefined;
+  // Block credential fallback only for non-local URL overrides to prevent exfiltration
+  const hasNonLocalUrlOverride = !!urlOverride && !isLocalUrl(urlOverride);
   const remoteUrl =
     typeof remote?.url === "string" && remote.url.trim().length > 0 ? remote.url.trim() : undefined;
   if (isRemoteMode && !urlOverride && !remoteUrl) {
@@ -152,32 +173,38 @@ export async function callGateway<T = Record<string, unknown>>(
     overrideTlsFingerprint ||
     remoteTlsFingerprint ||
     (tlsRuntime?.enabled ? tlsRuntime.fingerprintSha256 : undefined);
-  const token =
-    (typeof opts.token === "string" && opts.token.trim().length > 0
-      ? opts.token.trim()
-      : undefined) ||
-    (isRemoteMode
-      ? typeof remote?.token === "string" && remote.token.trim().length > 0
-        ? remote.token.trim()
-        : undefined
-      : process.env.OPENCLAW_GATEWAY_TOKEN?.trim() ||
-        process.env.CLAWDBOT_GATEWAY_TOKEN?.trim() ||
-        (typeof authToken === "string" && authToken.trim().length > 0
-          ? authToken.trim()
-          : undefined));
-  const password =
-    (typeof opts.password === "string" && opts.password.trim().length > 0
+  const explicitToken =
+    typeof opts.token === "string" && opts.token.trim().length > 0 ? opts.token.trim() : undefined;
+  const explicitPassword =
+    typeof opts.password === "string" && opts.password.trim().length > 0
       ? opts.password.trim()
-      : undefined) ||
-    process.env.OPENCLAW_GATEWAY_PASSWORD?.trim() ||
-    process.env.CLAWDBOT_GATEWAY_PASSWORD?.trim() ||
-    (isRemoteMode
-      ? typeof remote?.password === "string" && remote.password.trim().length > 0
-        ? remote.password.trim()
-        : undefined
-      : typeof authPassword === "string" && authPassword.trim().length > 0
-        ? authPassword.trim()
-        : undefined);
+      : undefined;
+  const token =
+    explicitToken ||
+    (!hasNonLocalUrlOverride
+      ? isRemoteMode
+        ? typeof remote?.token === "string" && remote.token.trim().length > 0
+          ? remote.token.trim()
+          : undefined
+        : process.env.OPENCLAW_GATEWAY_TOKEN?.trim() ||
+          process.env.CLAWDBOT_GATEWAY_TOKEN?.trim() ||
+          (typeof authToken === "string" && authToken.trim().length > 0
+            ? authToken.trim()
+            : undefined)
+      : undefined);
+  const password =
+    explicitPassword ||
+    (!hasNonLocalUrlOverride
+      ? process.env.OPENCLAW_GATEWAY_PASSWORD?.trim() ||
+        process.env.CLAWDBOT_GATEWAY_PASSWORD?.trim() ||
+        (isRemoteMode
+          ? typeof remote?.password === "string" && remote.password.trim().length > 0
+            ? remote.password.trim()
+            : undefined
+          : typeof authPassword === "string" && authPassword.trim().length > 0
+            ? authPassword.trim()
+            : undefined)
+      : undefined);
 
   const formatCloseError = (code: number, reason: string) => {
     const reasonText = reason?.trim() || "no close reason";
