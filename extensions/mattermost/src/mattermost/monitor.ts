@@ -24,6 +24,7 @@ import {
   createMattermostClient,
   fetchMattermostChannel,
   fetchMattermostMe,
+  fetchMattermostPost,
   fetchMattermostUser,
   normalizeMattermostBaseUrl,
   sendMattermostTyping,
@@ -927,6 +928,163 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         } catch {
           return;
         }
+        
+        // Handle reaction events
+        if (payload.event === "reaction_added" || payload.event === "reaction_removed") {
+          try {
+            const reactionData = payload.data?.reaction;
+            if (!reactionData) {
+              return;
+            }
+
+            let reaction: any;
+            if (typeof reactionData === "string") {
+              try {
+                reaction = JSON.parse(reactionData);
+              } catch {
+                return;
+              }
+            } else {
+              reaction = reactionData;
+            }
+
+            const { user_id, post_id, emoji_name } = reaction ?? {};
+            const action = payload.event === "reaction_added" ? "added" : "removed";
+            logVerboseMessage(
+              `mattermost: ${payload.event} emoji=${emoji_name} post=${post_id} user=${user_id}`,
+            );
+
+            const actorId = typeof user_id === "string" ? user_id.trim() : "";
+            const reactionPostId = typeof post_id === "string" ? post_id.trim() : "";
+            if (!actorId || !reactionPostId) {
+              return;
+            }
+            if (actorId === botUserId) {
+              return;
+            }
+
+            let reactedPost: MattermostPost | null = null;
+            try {
+              reactedPost = await fetchMattermostPost(client, reactionPostId);
+            } catch (err) {
+              logVerboseMessage(
+                `mattermost: reaction ${action} post lookup failed: ${String(err)}`,
+              );
+              return;
+            }
+            if (!reactedPost || isSystemPost(reactedPost)) {
+              return;
+            }
+            const channelId = reactedPost.channel_id?.trim();
+            if (!channelId) {
+              return;
+            }
+
+            const channelInfo = await resolveChannelInfo(channelId);
+            const channelType = channelInfo?.type ?? undefined;
+            const kind = channelKind(channelType);
+
+            const actorName =
+              (await resolveUserInfo(actorId))?.username?.trim() || actorId || "user";
+            const dmPolicy = account.config.dmPolicy ?? "pairing";
+            const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
+            const groupPolicy = account.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
+            const configAllowFrom = normalizeAllowList(account.config.allowFrom ?? []);
+            const configGroupAllowFrom = normalizeAllowList(account.config.groupAllowFrom ?? []);
+            const storeAllowFrom = normalizeAllowList(
+              await core.channel.pairing.readAllowFromStore("mattermost").catch(() => []),
+            );
+            const effectiveAllowFrom = Array.from(new Set([...configAllowFrom, ...storeAllowFrom]));
+            const effectiveGroupAllowFrom = Array.from(
+              new Set([
+                ...(configGroupAllowFrom.length > 0 ? configGroupAllowFrom : configAllowFrom),
+                ...storeAllowFrom,
+              ]),
+            );
+            const senderAllowed = isSenderAllowed({
+              senderId: actorId,
+              senderName: actorName,
+              allowFrom: effectiveAllowFrom,
+            });
+            const groupSenderAllowed = isSenderAllowed({
+              senderId: actorId,
+              senderName: actorName,
+              allowFrom: effectiveGroupAllowFrom,
+            });
+
+            if (kind === "dm") {
+              if (dmPolicy === "disabled") {
+                logVerboseMessage(`mattermost: drop dm reaction (dmPolicy=disabled actor=${actorId})`);
+                return;
+              }
+              if (dmPolicy !== "open" && !senderAllowed) {
+                logVerboseMessage(`mattermost: drop dm reaction actor=${actorId} (dmPolicy=${dmPolicy})`);
+                return;
+              }
+            } else {
+              if (groupPolicy === "disabled") {
+                logVerboseMessage("mattermost: drop group reaction (groupPolicy=disabled)");
+                return;
+              }
+              if (groupPolicy === "allowlist") {
+                if (effectiveGroupAllowFrom.length === 0) {
+                  logVerboseMessage("mattermost: drop group reaction (no group allowlist)");
+                  return;
+                }
+                if (!groupSenderAllowed) {
+                  logVerboseMessage(`mattermost: drop group reaction actor=${actorId} (not in groupAllowFrom)`);
+                  return;
+                }
+              }
+            }
+
+            const channelName = channelInfo?.name ?? "";
+            const channelDisplay = channelInfo?.display_name ?? channelName;
+            const roomLabel = channelName ? `#${channelName}` : channelDisplay || `#${channelId}`;
+            const emojiLabel = typeof emoji_name === "string" && emoji_name.trim()
+              ? emoji_name.trim()
+              : "emoji";
+            const authorId = reactedPost.user_id?.trim() || "";
+            const authorLabel = authorId
+              ? (await resolveUserInfo(authorId))?.username?.trim() || authorId
+              : undefined;
+
+            const baseText =
+              kind === "dm"
+                ? `Mattermost reaction ${action}: :${emojiLabel}: by ${actorName} in DM msg ${reactionPostId}`
+                : `Mattermost reaction ${action}: :${emojiLabel}: by ${actorName} in ${roomLabel} msg ${reactionPostId}`;
+            const text = authorLabel ? `${baseText} from ${authorLabel}` : baseText;
+
+            const teamId = channelInfo?.team_id ?? undefined;
+            const route = core.channel.routing.resolveAgentRoute({
+              cfg,
+              channel: "mattermost",
+              accountId: account.accountId,
+              teamId,
+              peer: {
+                kind,
+                id: kind === "dm" ? actorId : channelId,
+              },
+            });
+            const baseSessionKey = route.sessionKey;
+            const threadRootId = reactedPost.root_id?.trim() || undefined;
+            const threadKeys = resolveThreadSessionKeys({
+              baseSessionKey,
+              threadId: threadRootId,
+              parentSessionKey: threadRootId ? baseSessionKey : undefined,
+            });
+            const sessionKey = threadKeys.sessionKey;
+
+            core.system.enqueueSystemEvent(text, {
+              sessionKey,
+              contextKey: `mattermost:reaction:${action}:${channelId}:${reactionPostId}:${actorId}:${emojiLabel}`,
+            });
+          } catch (err) {
+            logVerboseMessage(`mattermost: reaction handler failed: ${String(err)}`);
+          }
+          return;
+        }
+        
         if (payload.event !== "posted") {
           return;
         }
