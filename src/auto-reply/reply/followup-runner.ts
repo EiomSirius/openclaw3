@@ -206,6 +206,8 @@ export function createFollowupRunner(params: {
           storePath,
           sessionKey,
           usage,
+          sessionId: queued.run.sessionId,
+          sessionFile: queued.run.sessionFile,
           modelUsed,
           providerUsed: fallbackProvider,
           contextTokensUsed,

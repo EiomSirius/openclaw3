@@ -388,6 +388,8 @@ export async function runReplyAgent(params: {
       storePath,
       sessionKey,
       usage,
+      sessionId: followupRun.run.sessionId,
+      sessionFile: followupRun.run.sessionFile,
       modelUsed,
       providerUsed,
       contextTokensUsed,

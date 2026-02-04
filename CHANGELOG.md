@@ -27,6 +27,7 @@ Docs: https://docs.openclaw.ai
 ### Fixes
 
 - CLI status: resolve build-info from bundled dist output (fixes "unknown" commit in npm builds).
+- TUI: keep session token counts updated when live usage metadata is missing. (#8196)
 
 ## 2026.2.2-1
 
