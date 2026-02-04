@@ -13,6 +13,8 @@ import {
 } from "./google-gemini-model-default.js";
 import {
   applyAuthProfileConfig,
+  applyErnieConfig,
+  applyErnieProviderConfig,
   applyKimiCodeConfig,
   applyKimiCodeProviderConfig,
   applyMoonshotConfig,
@@ -30,6 +32,7 @@ import {
   applyXiaomiConfig,
   applyXiaomiProviderConfig,
   applyZaiConfig,
+  ERNIE_DEFAULT_MODEL_REF,
   KIMI_CODING_MODEL_REF,
   MOONSHOT_DEFAULT_MODEL_REF,
   OPENROUTER_DEFAULT_MODEL_REF,
@@ -37,6 +40,7 @@ import {
   VENICE_DEFAULT_MODEL_REF,
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
   XIAOMI_DEFAULT_MODEL_REF,
+  setErnieApiKey,
   setGeminiApiKey,
   setKimiCodingApiKey,
   setMoonshotApiKey,
@@ -96,6 +100,8 @@ export async function applyAuthChoiceApiProviders(
       authChoice = "venice-api-key";
     } else if (params.opts.tokenProvider === "opencode") {
       authChoice = "opencode-zen";
+    } else if (params.opts.tokenProvider === "ernie") {
+      authChoice = "ernie-api-key";
     }
   }
 
@@ -634,6 +640,63 @@ export async function applyAuthChoiceApiProviders(
         applyDefaultConfig: applyOpencodeZenConfig,
         applyProviderConfig: applyOpencodeZenProviderConfig,
         noteDefault: OPENCODE_ZEN_DEFAULT_MODEL,
+        noteAgentModel,
+        prompter: params.prompter,
+      });
+      nextConfig = applied.config;
+      agentModelOverride = applied.agentModelOverride ?? agentModelOverride;
+    }
+    return { config: nextConfig, agentModelOverride };
+  }
+
+  if (authChoice === "ernie-api-key") {
+    let hasCredential = false;
+    if (!hasCredential && params.opts?.token && params.opts?.tokenProvider === "ernie") {
+      setErnieApiKey(normalizeApiKeyInput(params.opts.token), params.agentDir);
+      hasCredential = true;
+    }
+
+    if (!hasCredential) {
+      await params.prompter.note(
+        [
+          "ERNIE (百度文心) uses Qianfan API for inference.",
+          "Get your API key at: https://console.bce.baidu.com/qianfan/ais/console/applicationConsole/application",
+          "API key format: bce-v3/ALTAK-...",
+        ].join("\n"),
+        "ERNIE",
+      );
+    }
+    const envKey = resolveEnvApiKey("ernie");
+    if (envKey) {
+      const useExisting = await params.prompter.confirm({
+        message: `Use existing ERNIE_API_KEY (${envKey.source}, ${formatApiKeyPreview(envKey.apiKey)})?`,
+        initialValue: true,
+      });
+      if (useExisting) {
+        setErnieApiKey(envKey.apiKey, params.agentDir);
+        hasCredential = true;
+      }
+    }
+    if (!hasCredential) {
+      const key = await params.prompter.text({
+        message: "Enter ERNIE API key",
+        validate: validateApiKeyInput,
+      });
+      setErnieApiKey(normalizeApiKeyInput(String(key)), params.agentDir);
+    }
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "ernie:default",
+      provider: "ernie",
+      mode: "api_key",
+    });
+    {
+      const applied = await applyDefaultModelChoice({
+        config: nextConfig,
+        setDefaultModel: params.setDefaultModel,
+        defaultModel: ERNIE_DEFAULT_MODEL_REF,
+        applyDefaultConfig: applyErnieConfig,
+        applyProviderConfig: applyErnieProviderConfig,
+        noteDefault: ERNIE_DEFAULT_MODEL_REF,
         noteAgentModel,
         prompter: params.prompter,
       });

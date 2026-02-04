@@ -10,6 +10,7 @@ import { buildTokenProfileId, validateAnthropicSetupToken } from "../../auth-tok
 import { applyGoogleGeminiModelDefault } from "../../google-gemini-model-default.js";
 import {
   applyAuthProfileConfig,
+  applyErnieConfig,
   applyKimiCodeConfig,
   applyMinimaxApiConfig,
   applyMinimaxConfig,
@@ -22,6 +23,7 @@ import {
   applyXiaomiConfig,
   applyZaiConfig,
   setAnthropicApiKey,
+  setErnieApiKey,
   setGeminiApiKey,
   setKimiCodingApiKey,
   setMinimaxApiKey,
@@ -212,6 +214,29 @@ export async function applyNonInteractiveAuthChoice(params: {
       mode: "api_key",
     });
     return applyXiaomiConfig(nextConfig);
+  }
+
+  if (authChoice === "ernie-api-key") {
+    const resolved = await resolveNonInteractiveApiKey({
+      provider: "ernie",
+      cfg: baseConfig,
+      flagValue: opts.ernieApiKey,
+      flagName: "--ernie-api-key",
+      envVar: "ERNIE_API_KEY",
+      runtime,
+    });
+    if (!resolved) {
+      return null;
+    }
+    if (resolved.source !== "profile") {
+      setErnieApiKey(resolved.key);
+    }
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "ernie:default",
+      provider: "ernie",
+      mode: "api_key",
+    });
+    return applyErnieConfig(nextConfig);
   }
 
   if (authChoice === "openai-api-key") {
