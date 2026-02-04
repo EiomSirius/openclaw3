@@ -181,6 +181,11 @@ JOB SCHEMA (for add action):
 SCHEDULE TYPES (schedule.kind):
 - "at": One-shot at absolute time
   { "kind": "at", "atMs": <unix-ms-timestamp> }
+  IMPORTANT: atMs must be a FUTURE Unix timestamp in milliseconds. Before setting atMs:
+  1. First use a time tool (e.g. datetime, shell command like "date +%s000") to get the current timestamp
+  2. Calculate the target time based on current time (e.g. currentMs + 3600000 for 1 hour later)
+  3. NEVER guess or hardcode a timestamp without verifying it against the current time
+  Example: If current time is 1706900000000 and you want to remind in 30 minutes, use 1706900000000 + 1800000 = 1706901800000
 - "every": Recurring interval
   { "kind": "every", "everyMs": <interval-ms>, "anchorMs": <optional-start-ms> }
 - "cron": Cron expression
@@ -225,6 +230,27 @@ Use jobId as the canonical identifier; id is accepted for compatibility. Use con
             throw new Error("job required");
           }
           const job = normalizeCronJobCreate(params.job) ?? params.job;
+
+          // Validate: for "at" schedule, atMs must be a valid future timestamp
+          if (job && typeof job === "object" && "schedule" in job) {
+            const schedule = (job as { schedule?: { kind?: string; atMs?: number } }).schedule;
+            if (schedule?.kind === "at" && typeof schedule.atMs === "number") {
+              if (!Number.isFinite(schedule.atMs)) {
+                throw new Error(
+                  `schedule.atMs must be a valid finite number. Provided: ${schedule.atMs}. Use a time tool to get the current timestamp first, then calculate the future time.`,
+                );
+              }
+              const nowMs = Date.now();
+              if (schedule.atMs <= nowMs) {
+                const scheduledDate = new Date(schedule.atMs).toISOString();
+                const nowDate = new Date(nowMs).toISOString();
+                throw new Error(
+                  `schedule.atMs must be in the future. Provided: ${schedule.atMs} (${scheduledDate}), current time: ${nowMs} (${nowDate}). Use a time tool to get the current timestamp first, then calculate the future time.`,
+                );
+              }
+            }
+          }
+
           if (job && typeof job === "object" && !("agentId" in job)) {
             const cfg = loadConfig();
             const agentId = opts?.agentSessionKey

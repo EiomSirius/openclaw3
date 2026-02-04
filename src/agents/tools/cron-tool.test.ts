@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const callGatewayMock = vi.fn();
 vi.mock("../../gateway/call.js", () => ({
@@ -11,10 +11,21 @@ vi.mock("../agent-scope.js", () => ({
 
 import { createCronTool } from "./cron-tool.js";
 
+// Fixed timestamp for deterministic tests
+const FAKE_NOW = 1700000000000; // 2023-11-14T22:13:20.000Z
+const FUTURE_MS = FAKE_NOW + 3600000; // 1 hour from FAKE_NOW
+const PAST_MS = FAKE_NOW - 60000; // 1 minute before FAKE_NOW
+
 describe("cron tool", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FAKE_NOW);
     callGatewayMock.mockReset();
     callGatewayMock.mockResolvedValue({ ok: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it.each([
@@ -68,7 +79,7 @@ describe("cron tool", () => {
       job: {
         data: {
           name: "wake-up",
-          schedule: { atMs: 123 },
+          schedule: { atMs: FUTURE_MS },
           payload: { kind: "systemEvent", text: "hello" },
         },
       },
@@ -82,7 +93,7 @@ describe("cron tool", () => {
     expect(call.method).toBe("cron.add");
     expect(call.params).toEqual({
       name: "wake-up",
-      schedule: { kind: "at", atMs: 123 },
+      schedule: { kind: "at", atMs: FUTURE_MS },
       sessionTarget: "main",
       wakeMode: "next-heartbeat",
       payload: { kind: "systemEvent", text: "hello" },
@@ -95,7 +106,7 @@ describe("cron tool", () => {
       action: "add",
       job: {
         name: "wake-up",
-        schedule: { atMs: 123 },
+        schedule: { atMs: FUTURE_MS },
         agentId: null,
       },
     });
@@ -126,7 +137,7 @@ describe("cron tool", () => {
       contextMessages: 3,
       job: {
         name: "reminder",
-        schedule: { atMs: 123 },
+        schedule: { atMs: FUTURE_MS },
         payload: { kind: "systemEvent", text: "Reminder: the thing." },
       },
     });
@@ -163,7 +174,7 @@ describe("cron tool", () => {
       contextMessages: 20,
       job: {
         name: "reminder",
-        schedule: { atMs: 123 },
+        schedule: { atMs: FUTURE_MS },
         payload: { kind: "systemEvent", text: "Reminder: the thing." },
       },
     });
@@ -194,7 +205,7 @@ describe("cron tool", () => {
       action: "add",
       job: {
         name: "reminder",
-        schedule: { atMs: 123 },
+        schedule: { atMs: FUTURE_MS },
         payload: { text: "Reminder: the thing." },
       },
     });
@@ -218,7 +229,7 @@ describe("cron tool", () => {
       action: "add",
       job: {
         name: "reminder",
-        schedule: { atMs: 123 },
+        schedule: { atMs: FUTURE_MS },
         agentId: null,
         payload: { kind: "systemEvent", text: "Reminder: the thing." },
       },
@@ -230,5 +241,61 @@ describe("cron tool", () => {
     };
     expect(call.method).toBe("cron.add");
     expect(call.params?.agentId).toBeNull();
+  });
+
+  it("rejects past timestamp for schedule.kind='at'", async () => {
+    const tool = createCronTool();
+
+    await expect(
+      tool.execute("call-past", {
+        action: "add",
+        job: {
+          name: "reminder",
+          schedule: { kind: "at", atMs: PAST_MS },
+          payload: { kind: "systemEvent", text: "Should fail" },
+        },
+      }),
+    ).rejects.toThrow(/schedule\.atMs must be in the future/);
+
+    // Should not call gateway when validation fails
+    expect(callGatewayMock).not.toHaveBeenCalled();
+  });
+
+  it("allows future timestamp for schedule.kind='at'", async () => {
+    callGatewayMock.mockResolvedValueOnce({ ok: true });
+
+    const tool = createCronTool();
+
+    await tool.execute("call-future", {
+      action: "add",
+      job: {
+        name: "reminder",
+        schedule: { kind: "at", atMs: FUTURE_MS },
+        payload: { kind: "systemEvent", text: "Should succeed" },
+      },
+    });
+
+    expect(callGatewayMock).toHaveBeenCalledTimes(1);
+    const call = callGatewayMock.mock.calls[0]?.[0] as {
+      method?: string;
+    };
+    expect(call.method).toBe("cron.add");
+  });
+
+  it.each([NaN, Infinity, -Infinity])("rejects invalid atMs value: %s", async (invalidValue) => {
+    const tool = createCronTool();
+
+    await expect(
+      tool.execute("call-invalid", {
+        action: "add",
+        job: {
+          name: "reminder",
+          schedule: { kind: "at", atMs: invalidValue },
+          payload: { kind: "systemEvent", text: "Should fail" },
+        },
+      }),
+    ).rejects.toThrow(/schedule\.atMs must be a valid finite number/);
+
+    expect(callGatewayMock).not.toHaveBeenCalled();
   });
 });
