@@ -429,7 +429,7 @@ Related: [Migrating](/install/migrating), [Where things live on disk](/help/faq#
 [Agent workspace](/concepts/agent-workspace), [Doctor](/gateway/doctor),
 [Remote mode](/gateway/remote).
 
-### Where do I see what is new in the latest version
+### Where do I see what is new in the latest version?
 
 Check the GitHub changelog:
 https://github.com/openclaw/openclaw/blob/main/CHANGELOG.md
@@ -438,7 +438,7 @@ Newest entries are at the top. If the top section is marked **Unreleased**, the 
 section is the latest shipped version. Entries are grouped by **Highlights**, **Changes**, and
 **Fixes** (plus docs/other sections when needed).
 
-### I cant access docs.openclaw.ai SSL error What now
+### I cannot access docs.openclaw.ai (SSL error). What now?
 
 Some Comcast/Xfinity connections incorrectly block `docs.openclaw.ai` via Xfinity
 Advanced Security. Disable it or allowlist `docs.openclaw.ai`, then retry. More
@@ -448,7 +448,7 @@ Please help us unblock it by reporting here: https://spa.xfinity.com/check_url_s
 If you still can't reach the site, the docs are mirrored on GitHub:
 https://github.com/openclaw/openclaw/tree/main/docs
 
-### What's the difference between stable and beta
+### What is the difference between stable and beta?
 
 **Stable** and **beta** are **npm dist-tags**, not separate code lines:
 

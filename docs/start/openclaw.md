@@ -220,10 +220,12 @@ OpenClaw extracts these and sends them as media alongside the text.
 ## Operations checklist
 
 ```bash
-openclaw status          # local status (creds, sessions, queued events)
-openclaw status --all    # full diagnosis (read-only, pasteable)
-openclaw status --deep   # adds gateway health probes (Telegram + Discord)
-openclaw health --json   # gateway health snapshot (WS)
+openclaw gateway status        # gateway service + RPC probe
+openclaw gateway status --deep # adds system-level scans + extra services
+openclaw status                # local status (creds, sessions, queued events)
+openclaw status --all          # full diagnosis (read-only, pasteable)
+openclaw status --deep         # adds gateway health probes (Telegram + Discord)
+openclaw health --json         # gateway health snapshot (WS)
 ```
 
 Logs live under `/tmp/openclaw/` (default: `openclaw-YYYY-MM-DD.log`).
