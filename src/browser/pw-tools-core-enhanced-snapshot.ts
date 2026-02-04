@@ -334,7 +334,7 @@ function buildRoleSnapshotFromInteractiveRegions(
     return `e${refCounter}`;
   };
 
-  for (const [elementId, region] of Object.entries(regions)) {
+  for (const [_elementId, region] of Object.entries(regions)) {
     const role = region.role.toLowerCase();
     const name = region.aria_name.trim();
 
@@ -506,7 +506,7 @@ export async function snapshotHybridViaPlaywright(opts: {
 
   // Find elements in enhanced regions that aren't in Playwright's snapshot
   const existingRefs = new Set(Object.keys(built.refs));
-  for (const [elementId, region] of Object.entries(enhancedRegions)) {
+  for (const [_elementId, region] of Object.entries(enhancedRegions)) {
     const role = region.role.toLowerCase();
     const name = region.aria_name.trim();
 

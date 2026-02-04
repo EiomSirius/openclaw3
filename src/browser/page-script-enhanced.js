@@ -95,10 +95,12 @@ var OpenClawEnhancedDetection = OpenClawEnhancedDetection || (function() {
          return true;
      }
 
-     while (hit) {
-         if (hit == element) return true;
-         hit = hit.parentNode;
-     }
+      while (hit) {
+          if (hit == element) {
+              return true;
+          }
+          hit = hit.parentNode;
+      }
      return false;
   };
 
