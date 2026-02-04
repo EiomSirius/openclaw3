@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { SessionEntry } from "../../config/sessions.js";
 import type { CommandHandler } from "./commands-types.js";
 import { abortEmbeddedPiRun } from "../../agents/pi-embedded.js";
@@ -337,10 +338,17 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
 
   // Trigger internal hook for stop command (only if persistence succeeded)
   // Use stable fallback key for non-persisted flows so command hooks always fire
+  // Hash From/To to avoid PII in hook routing keys
+  const fallbackKey =
+    abortTarget.key || params.sessionKey
+      ? null
+      : `command:${params.ctx.Provider || "unknown"}:${crypto
+          .createHash("sha256")
+          .update(`${params.ctx.From || ""}:${params.ctx.To || ""}`)
+          .digest("hex")
+          .slice(0, 16)}`;
   const sessionKeyForHook =
-    abortTarget.key ||
-    params.sessionKey ||
-    `command:${params.ctx.Provider || "unknown"}:${params.ctx.From || "unknown"}:${params.ctx.To || "unknown"}`;
+    abortTarget.key || params.sessionKey || fallbackKey || "command:unknown";
   let hookMessages: string[] = [];
   if (!persistenceFailed) {
     const entry = abortTarget.entry ?? params.sessionEntry;

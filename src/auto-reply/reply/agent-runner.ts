@@ -297,12 +297,22 @@ export async function runReplyAgent(params: {
         transcriptCandidates.add(resolved);
       }
       transcriptCandidates.add(resolveSessionTranscriptPath(prevSessionId, agentId));
+      let deletedCount = 0;
       for (const candidate of transcriptCandidates) {
         try {
           fs.unlinkSync(candidate);
-        } catch {
-          // Best-effort cleanup.
+          deletedCount++;
+        } catch (err) {
+          // Best-effort cleanup - log failures for debugging
+          defaultRuntime.error(
+            `Failed to delete transcript ${candidate}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
+      }
+      if (deletedCount > 0) {
+        defaultRuntime.error(
+          `Cleaned up ${deletedCount} transcript(s) for session ${prevSessionId}`,
+        );
       }
     }
 

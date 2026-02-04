@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type {
   CommandHandler,
   CommandHandlerResult,
@@ -75,9 +76,15 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
   if (resetRequested && params.command.isAuthorizedSender) {
     const commandAction = resetMatch?.[1] ?? "new";
     // Use stable fallback key for non-persisted flows so command hooks always fire
-    const hookSessionKey =
-      params.sessionKey ||
-      `command:${params.ctx.Provider || "unknown"}:${params.ctx.From || "unknown"}:${params.ctx.To || "unknown"}`;
+    // Hash From/To to avoid PII in hook routing keys
+    const fallbackKey = params.sessionKey
+      ? null
+      : `command:${params.ctx.Provider || "unknown"}:${crypto
+          .createHash("sha256")
+          .update(`${params.ctx.From || ""}:${params.ctx.To || ""}`)
+          .digest("hex")
+          .slice(0, 16)}`;
+    const hookSessionKey = params.sessionKey || fallbackKey || "command:unknown";
     const hookEvent = createInternalHookEvent("command", commandAction, hookSessionKey, {
       sessionEntry: params.sessionEntry ? structuredClone(params.sessionEntry) : undefined,
       previousSessionEntry: params.previousSessionEntry
@@ -107,6 +114,10 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
           threadId: params.ctx.MessageThreadId,
           cfg: params.cfg,
         });
+      } else {
+        logVerbose(
+          `Hook messages for ${commandAction} dropped: missing ${!channel ? "channel" : "to"} (hook output is best-effort depending on routing context)`,
+        );
       }
     }
   }

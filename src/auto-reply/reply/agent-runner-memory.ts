@@ -83,7 +83,7 @@ export async function runMemoryFlushIfNeeded(params: {
   }
 
   // Lifecycle hook: Memory Flush Start
-  // Emit whenever a flush runs, regardless of whether we can persist metadata
+  // Only fires when sessionKey is present (agent lifecycle event requires session context)
   let flushHookMessages: string[] = [];
   if (params.sessionKey) {
     // Report the same totalTokens that triggered shouldRunMemoryFlush decision.
