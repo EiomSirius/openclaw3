@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ToolPolicySchema } from "./zod-schema.agent-runtime.js";
 import { ChannelHeartbeatVisibilitySchema } from "./zod-schema.channels.js";
 import {
+  AckReactionEmojiSchema,
   BlockStreamingCoalesceSchema,
   DmConfigSchema,
   DmPolicySchema,
@@ -50,7 +51,7 @@ export const WhatsAppAccountSchema = z
       .optional(),
     ackReaction: z
       .object({
-        emoji: z.string().optional(),
+        emoji: AckReactionEmojiSchema.optional(),
         direct: z.boolean().optional().default(true),
         group: z.enum(["always", "mentions", "never"]).optional().default("mentions"),
       })
@@ -119,7 +120,7 @@ export const WhatsAppConfigSchema = z
       .optional(),
     ackReaction: z
       .object({
-        emoji: z.string().optional(),
+        emoji: AckReactionEmojiSchema.optional(),
         direct: z.boolean().optional().default(true),
         group: z.enum(["always", "mentions", "never"]).optional().default("mentions"),
       })

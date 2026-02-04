@@ -75,8 +75,8 @@ export type WhatsAppConfig = {
   >;
   /** Acknowledgment reaction sent immediately upon message receipt. */
   ackReaction?: {
-    /** Emoji to use for acknowledgment (e.g., "👀"). Empty = disabled. */
-    emoji?: string;
+    /** Emoji or list of emojis to use for acknowledgment (randomized). Empty = disabled. */
+    emoji?: string | string[];
     /** Send reactions in direct chats. Default: true. */
     direct?: boolean;
     /**
@@ -141,8 +141,8 @@ export type WhatsAppAccountConfig = {
   >;
   /** Acknowledgment reaction sent immediately upon message receipt. */
   ackReaction?: {
-    /** Emoji to use for acknowledgment (e.g., "👀"). Empty = disabled. */
-    emoji?: string;
+    /** Emoji or list of emojis to use for acknowledgment (randomized). Empty = disabled. */
+    emoji?: string | string[];
     /** Send reactions in direct chats. Default: true. */
     direct?: boolean;
     /**
