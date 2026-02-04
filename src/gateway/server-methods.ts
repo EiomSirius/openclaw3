@@ -12,6 +12,7 @@ import { deviceHandlers } from "./server-methods/devices.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
 import { logsHandlers } from "./server-methods/logs.js";
+import { modelRequestsHandlers } from "./server-methods/model-requests.js";
 import { modelsHandlers } from "./server-methods/models.js";
 import { nodeHandlers } from "./server-methods/nodes.js";
 import { sendHandlers } from "./server-methods/send.js";
@@ -58,6 +59,8 @@ const READ_METHODS = new Set([
   "tts.status",
   "tts.providers",
   "models.list",
+  "model-requests.list",
+  "model-requests.clear",
   "agents.list",
   "agent.identity.get",
   "skills.status",
@@ -171,6 +174,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...execApprovalsHandlers,
   ...webHandlers,
   ...modelsHandlers,
+  ...modelRequestsHandlers,
   ...configHandlers,
   ...wizardHandlers,
   ...talkHandlers,

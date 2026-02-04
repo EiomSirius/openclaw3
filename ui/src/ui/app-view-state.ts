@@ -163,6 +163,14 @@ export type AppViewState = {
   logsLevelFilters: Record<LogLevel, boolean>;
   logsAutoFollow: boolean;
   logsTruncated: boolean;
+  // Model requests
+  requestsLoading: boolean;
+  requestsError: string | null;
+  requestsEntries: import("./views/requests.ts").ModelRequestEntry[];
+  requestsAutoRefresh: boolean;
+  handleLoadRequests: () => Promise<void>;
+  handleClearRequests: () => Promise<void>;
+  handleToggleRequestsAutoRefresh: () => void;
   client: GatewayBrowserClient | null;
   connect: () => void;
   setTab: (tab: Tab) => void;

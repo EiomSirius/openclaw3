@@ -40,6 +40,10 @@ import {
 } from "../infra/skills-remote.js";
 import { scheduleGatewayUpdateCheck } from "../infra/update-startup.js";
 import { startDiagnosticHeartbeat, stopDiagnosticHeartbeat } from "../logging/diagnostic.js";
+import {
+  setModelRequestEventsEnabled,
+  onModelRequestEvent,
+} from "../infra/model-request-events.js";
 import { createSubsystemLogger, runtimeForLogger } from "../logging/subsystem.js";
 import { runOnboardingWizard } from "../wizard/onboarding.js";
 import { startGatewayConfigReloader } from "./config-reload.js";
@@ -222,6 +226,8 @@ export async function startGatewayServer(
   if (diagnosticsEnabled) {
     startDiagnosticHeartbeat();
   }
+  // Enable model request events for Control UI monitoring
+  setModelRequestEventsEnabled(true);
   setGatewaySigusr1RestartPolicy({ allowExternal: cfgAtStart.commands?.restart === true });
   initSubagentRegistry();
   const defaultAgentId = resolveDefaultAgentId(cfgAtStart);
@@ -453,6 +459,11 @@ export async function startGatewayServer(
     broadcast("heartbeat", evt, { dropIfSlow: true });
   });
 
+  // Broadcast model request events to Control UI clients
+  const modelRequestUnsub = onModelRequestEvent((evt) => {
+    broadcast("model.request", evt, { dropIfSlow: true });
+  });
+
   let heartbeatRunner = startHeartbeatRunner({ cfg: cfgAtStart });
 
   void cron.start().catch((err) => logCron.error(`failed to start: ${String(err)}`));
@@ -626,6 +637,8 @@ export async function startGatewayServer(
         skillsRefreshTimer = null;
       }
       skillsChangeUnsub();
+      modelRequestUnsub();
+      setModelRequestEventsEnabled(false);
       await close(opts);
     },
   };

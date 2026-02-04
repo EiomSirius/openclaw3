@@ -19,6 +19,10 @@ import {
   updateSessionStoreEntry,
 } from "../../config/sessions.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import {
+  createModelRequestTracker,
+  isModelRequestEventsEnabled,
+} from "../../infra/model-request-events.js";
 import { defaultRuntime } from "../../runtime.js";
 import { estimateUsageCost, resolveModelCostConfig } from "../../utils/usage-format.js";
 import { resolveResponseUsageMode, type VerboseLevel } from "../thinking.js";
@@ -305,8 +309,24 @@ export async function runReplyAgent(params: {
         `Role ordering conflict (${reason}). Restarting session ${sessionKey} -> ${nextSessionId}.`,
       cleanupTranscripts: true,
     });
+  // Create model request tracker for Control UI monitoring
+  const requestTracker = isModelRequestEventsEnabled()
+    ? createModelRequestTracker({
+        sessionKey,
+        sessionId: followupRun.run.sessionId,
+        channel: replyToChannel,
+        provider: followupRun.run.provider,
+        model: defaultModel,
+        requestType: "chat",
+      })
+    : null;
+
   try {
     const runStartedAt = Date.now();
+
+    // Signal request start for Control UI
+    requestTracker?.start();
+
     const runOutcome = await runAgentTurnWithFallback({
       commandBody,
       followupRun,
@@ -461,6 +481,35 @@ export async function runReplyAgent(params: {
         },
         costUsd,
         durationMs: Date.now() - runStartedAt,
+      });
+    }
+
+    // Signal successful request completion for Control UI
+    if (requestTracker && hasNonzeroUsage(usage)) {
+      const input = usage.input ?? 0;
+      const output = usage.output ?? 0;
+      const cacheRead = usage.cacheRead ?? 0;
+      const cacheWrite = usage.cacheWrite ?? 0;
+      const totalTokens = usage.total ?? input + output + cacheRead + cacheWrite;
+      const costConfig = resolveModelCostConfig({
+        provider: providerUsed,
+        model: modelUsed,
+        config: cfg,
+      });
+      const costUsd = estimateUsageCost({ usage, cost: costConfig });
+      requestTracker.success({
+        usage: {
+          input,
+          output,
+          cacheRead,
+          cacheWrite,
+          total: totalTokens,
+        },
+        context: {
+          limit: contextTokensUsed,
+          used: totalTokens,
+        },
+        costUsd,
       });
     }
 

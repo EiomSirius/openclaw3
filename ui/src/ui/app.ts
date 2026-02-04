@@ -269,6 +269,12 @@ export class OpenClawApp extends LitElement {
   @state() logsMaxBytes = 250_000;
   @state() logsAtBottom = true;
 
+  // Model requests state
+  @state() requestsLoading = false;
+  @state() requestsError: string | null = null;
+  @state() requestsEntries: import("./views/requests.ts").ModelRequestEntry[] = [];
+  @state() requestsAutoRefresh = true;
+
   client: GatewayBrowserClient | null = null;
   private chatScrollFrame: number | null = null;
   private chatScrollTimeout: number | null = null;
@@ -507,6 +513,55 @@ export class OpenClawApp extends LitElement {
     const newRatio = Math.max(0.4, Math.min(0.7, ratio));
     this.splitRatio = newRatio;
     this.applySettings({ ...this.settings, splitRatio: newRatio });
+  }
+
+  // Model requests handlers
+  async handleLoadRequests() {
+    if (!this.client) {
+      this.requestsError = "Not connected to gateway";
+      return;
+    }
+    this.requestsLoading = true;
+    this.requestsError = null;
+    try {
+      const result = await this.client.request<{
+        requests: import("./views/requests.ts").ModelRequestEntry[];
+        count: number;
+      }>("model-requests.list");
+      this.requestsEntries = result.requests ?? [];
+    } catch (err) {
+      this.requestsError = `Failed to load requests: ${String(err)}`;
+    } finally {
+      this.requestsLoading = false;
+    }
+  }
+
+  async handleClearRequests() {
+    if (!this.client) {
+      this.requestsError = "Not connected to gateway";
+      return;
+    }
+    try {
+      await this.client.request("model-requests.clear");
+      this.requestsEntries = [];
+    } catch (err) {
+      this.requestsError = `Failed to clear requests: ${String(err)}`;
+    }
+  }
+
+  handleToggleRequestsAutoRefresh() {
+    this.requestsAutoRefresh = !this.requestsAutoRefresh;
+  }
+
+  handleModelRequestEvent(event: import("./views/requests.ts").ModelRequestEntry) {
+    const existingIndex = this.requestsEntries.findIndex((r) => r.id === event.id);
+    if (existingIndex >= 0) {
+      const updated = [...this.requestsEntries];
+      updated[existingIndex] = event;
+      this.requestsEntries = updated;
+    } else {
+      this.requestsEntries = [event, ...this.requestsEntries].slice(0, 100);
+    }
   }
 
   render() {

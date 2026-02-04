@@ -66,6 +66,7 @@ import { renderInstances } from "./views/instances.ts";
 import { renderLogs } from "./views/logs.ts";
 import { renderNodes } from "./views/nodes.ts";
 import { renderOverview } from "./views/overview.ts";
+import { renderRequests } from "./views/requests.ts";
 import { renderSessions } from "./views/sessions.ts";
 import { renderSkills } from "./views/skills.ts";
 
@@ -950,6 +951,20 @@ export function renderApp(state: AppViewState) {
                 onSave: () => saveConfig(state as unknown as OpenClawApp),
                 onApply: () => applyConfig(state as unknown as OpenClawApp),
                 onUpdate: () => runUpdate(state as unknown as OpenClawApp),
+              })
+            : nothing
+        }
+
+        ${
+          state.tab === "requests"
+            ? renderRequests({
+                loading: state.requestsLoading,
+                requests: state.requestsEntries,
+                error: state.requestsError,
+                autoRefresh: state.requestsAutoRefresh,
+                onRefresh: () => state.handleLoadRequests(),
+                onClear: () => state.handleClearRequests(),
+                onToggleAutoRefresh: () => state.handleToggleRequestsAutoRefresh(),
               })
             : nothing
         }

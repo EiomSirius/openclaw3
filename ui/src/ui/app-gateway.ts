@@ -254,6 +254,14 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       host.execApprovalQueue = removeExecApproval(host.execApprovalQueue, resolved.id);
     }
   }
+
+  // Handle model request events for real-time monitoring
+  if (evt.event === "model.request") {
+    const payload = evt.payload as import("./views/requests.ts").ModelRequestEntry | undefined;
+    if (payload && (host as unknown as OpenClawApp).requestsAutoRefresh) {
+      (host as unknown as OpenClawApp).handleModelRequestEvent(payload);
+    }
+  }
 }
 
 export function applySnapshot(host: GatewayHost, hello: GatewayHelloOk) {
