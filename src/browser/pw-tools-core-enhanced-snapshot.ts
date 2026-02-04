@@ -1,7 +1,7 @@
 /**
  * Enhanced snapshot module using script-based interactive element detection.
  * Based on AutoGen's approach with multiple heuristics for better coverage.
- * 
+ *
  * This module provides an alternative to the standard Playwright snapshot methods
  * by using injected JavaScript to detect interactive elements with:
  * - Cursor-based detection (catches custom interactive elements)
@@ -36,7 +36,7 @@ function getPageScript(): string {
     const scriptPath = join(__dirname, "page-script-enhanced.js");
     pageScriptContent = readFileSync(scriptPath, "utf-8");
   }
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   return pageScriptContent!;
 }
 
@@ -114,7 +114,7 @@ async function ensureScriptInjected(page: Page): Promise<void> {
 
   const script = getPageScript();
   let lastError: unknown;
-  
+
   try {
     // Add as init script so it persists across navigations
     await page.addInitScript(script);
