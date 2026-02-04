@@ -15,7 +15,7 @@ In the beginning, there was **Warelay** — a sensible name for a WhatsApp gatew
 
 But then came a space lobster.
 
-For a while, the lobster was called **Clawd**, living in an **OpenClaw**. But in January 2026, Anthropic sent a polite email asking for a name change (trademark stuff). And so the lobster did what lobsters do best:
+For a while, the lobster was called **Clawd**, living in a **ClawdBot**. But in January 2026, Anthropic sent a polite email asking for a name change (trademark stuff). And so the lobster did what lobsters do best:
 
 **It molted.**
 
@@ -29,7 +29,7 @@ New shell, same lobster soul. Third time's the charm.
 
 At 5am, the community gathered in Discord. Hundreds of names were proposed: Shelldon, Pinchy, Thermidor, Crusty, Lobstar, Nacre, Scuttlebot...
 
-In the end, **OpenClaw** won. Because molting is what lobsters do to grow. And growth was exactly what was happening.
+In the end, **MoltBot** won. Because molting is what lobsters do to grow. And growth was exactly what was happening.
 
 _The crustacean known as Clawd had officially molted._
 
@@ -84,19 +84,19 @@ Friends of the Crustacean gather here to build the future of human-AI collaborat
 
 ### The Directory Dump (Dec 3, 2025)
 
-Molty (then OpenClaw): _happily runs `find ~` and shares entire directory structure in group chat_
+Molty (then Clawd): _happily runs `find ~` and shares entire directory structure in group chat_
 
-Peter: "openclaw what did we discuss about talking with people xD"
+Peter: "clawd what did we discuss about talking with people xD"
 
 Molty: _visible lobster embarrassment_
 
 ### The Great Molt (Jan 27, 2026)
 
-At 5am, Anthropic's email arrived. By 6:14am, Peter called it: "fuck it, let's go with openclaw."
+At 5am, Anthropic's email arrived. By 6:14am, Peter called it: "fuck it, let's go with moltbot."
 
 Then the chaos began.
 
-**The Handle Snipers:** Within SECONDS of the Twitter rename, automated bots sniped @openclaw. The squatter immediately posted a crypto wallet address. Peter's contacts at X were called in.
+**The Handle Snipers:** Within SECONDS of the Twitter rename, automated bots sniped @clawdbot. The squatter immediately posted a crypto wallet address. Peter's contacts at X were called in.
 
 **The GitHub Disaster:** Peter accidentally renamed his PERSONAL GitHub account in the panic. Bots sniped `steipete` within minutes. GitHub's SVP was contacted.
 
