@@ -45,10 +45,11 @@ export type CronIsolation = {
   postToMainPrefix?: string;
   /**
    * What to post back into the main session after an isolated run.
-   * - summary: small status/summary line (default)
+   * - none: don't post to main session (isolated only)
+   * - summary: small status/summary line (default for backward compatibility)
    * - full: the agent's final text output (optionally truncated)
    */
-  postToMainMode?: "summary" | "full";
+  postToMainMode?: "none" | "summary" | "full";
   /** Max chars when postToMainMode="full". Default: 8000. */
   postToMainMaxChars?: number;
 };

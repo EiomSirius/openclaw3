@@ -94,7 +94,7 @@ export function registerCronAddCommand(cron: Command) {
       .option("--post-prefix <prefix>", "Prefix for main-session post", "Cron")
       .option(
         "--post-mode <mode>",
-        "What to post back to main for isolated jobs (summary|full)",
+        "What to post back to main for isolated jobs (none|summary|full)",
         "summary",
       )
       .option("--post-max-chars <n>", "Max chars when --post-mode=full (default 8000)", "8000")
@@ -191,7 +191,9 @@ export function registerCronAddCommand(cron: Command) {
                       ? opts.postPrefix.trim()
                       : "Cron",
                   postToMainMode:
-                    opts.postMode === "full" || opts.postMode === "summary"
+                    opts.postMode === "none" ||
+                    opts.postMode === "full" ||
+                    opts.postMode === "summary"
                       ? opts.postMode
                       : undefined,
                   postToMainMaxChars:
