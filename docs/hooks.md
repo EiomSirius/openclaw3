@@ -240,8 +240,8 @@ Triggered during session lifecycle when session persistence is enabled (requires
 
 **Context includes**:
 
-- `sessionId`: The session ID (new session ID for `session:reset`)
-- `oldSessionId` and `newSessionId`: (for `session:reset` only) The session transition
+- `sessionId`: The session ID (always present; for `session:reset`, equals `newSessionId`)
+- `oldSessionId` and `newSessionId`: (for `session:reset` only) The session transition (both always present)
 
 **Lifecycle patterns**:
 

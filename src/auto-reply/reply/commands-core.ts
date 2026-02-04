@@ -72,9 +72,9 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
   }
 
   // Trigger internal hook for reset/new commands
-  if (resetRequested && params.command.isAuthorizedSender) {
+  if (resetRequested && params.command.isAuthorizedSender && params.sessionKey) {
     const commandAction = resetMatch?.[1] ?? "new";
-    const hookEvent = createInternalHookEvent("command", commandAction, params.sessionKey ?? "", {
+    const hookEvent = createInternalHookEvent("command", commandAction, params.sessionKey, {
       sessionEntry: params.sessionEntry ? structuredClone(params.sessionEntry) : undefined,
       previousSessionEntry: params.previousSessionEntry
         ? structuredClone(params.previousSessionEntry)

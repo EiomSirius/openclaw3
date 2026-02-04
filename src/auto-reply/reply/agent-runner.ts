@@ -253,6 +253,10 @@ export async function runReplyAgent(params: {
       return { success: false, hookMessages: [] };
     }
     const prevSessionId = prevEntry.sessionId;
+    if (!prevSessionId) {
+      defaultRuntime.error(`Cannot reset session ${sessionKey}: missing prevSessionId`);
+      return { success: false, hookMessages: [] };
+    }
     const nextSessionId = crypto.randomUUID();
     const nextEntry: SessionEntry = {
       ...prevEntry,
