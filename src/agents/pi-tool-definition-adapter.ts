@@ -13,37 +13,8 @@ import { jsonResult } from "./tools/common.js";
 // oxlint-disable-next-line typescript/no-explicit-any
 type AnyAgentTool = AgentTool<any, unknown>;
 
-type ToolExecuteArgsCurrent = [
-  string,
-  unknown,
-  AgentToolUpdateCallback<unknown> | undefined,
-  unknown,
-  AbortSignal | undefined,
-];
-type ToolExecuteArgsLegacy = [
-  string,
-  unknown,
-  AbortSignal | undefined,
-  AgentToolUpdateCallback<unknown> | undefined,
-  unknown,
-];
-type ToolExecuteArgs = ToolDefinition["execute"] extends (...args: infer P) => unknown
-  ? P
-  : ToolExecuteArgsCurrent;
-type ToolExecuteArgsAny = ToolExecuteArgs | ToolExecuteArgsLegacy | ToolExecuteArgsCurrent;
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isAbortSignal(value: unknown): value is AbortSignal {
-  return typeof value === "object" && value !== null && "aborted" in value;
-}
-
-function isLegacyToolExecuteArgs(args: ToolExecuteArgsAny): args is ToolExecuteArgsLegacy {
-  const third = args[2];
-  const fourth = args[3];
-  return isAbortSignal(third) || typeof fourth === "function";
 }
 
 function describeToolExecutionError(err: unknown): {
@@ -57,30 +28,6 @@ function describeToolExecutionError(err: unknown): {
   return { message: String(err) };
 }
 
-function splitToolExecuteArgs(args: ToolExecuteArgsAny): {
-  toolCallId: string;
-  params: unknown;
-  onUpdate: AgentToolUpdateCallback<unknown> | undefined;
-  signal: AbortSignal | undefined;
-} {
-  if (isLegacyToolExecuteArgs(args)) {
-    const [toolCallId, params, signal, onUpdate] = args;
-    return {
-      toolCallId,
-      params,
-      onUpdate,
-      signal,
-    };
-  }
-  const [toolCallId, params, onUpdate, _ctx, signal] = args;
-  return {
-    toolCallId,
-    params,
-    onUpdate,
-    signal,
-  };
-}
-
 export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
   return tools.map((tool) => {
     const name = tool.name || "tool";
@@ -90,8 +37,13 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
       label: tool.label ?? name,
       description: tool.description ?? "",
       parameters: tool.parameters,
-      execute: async (...args: ToolExecuteArgs): Promise<AgentToolResult<unknown>> => {
-        const { toolCallId, params, onUpdate, signal } = splitToolExecuteArgs(args);
+      execute: async (
+        toolCallId,
+        params,
+        signal: AbortSignal | undefined,
+        onUpdate: AgentToolUpdateCallback<unknown> | undefined,
+        _ctx,
+      ): Promise<AgentToolResult<unknown>> => {
         try {
           return await tool.execute(toolCallId, params, signal, onUpdate);
         } catch (err) {
@@ -136,8 +88,13 @@ export function toClientToolDefinitions(
       description: func.description ?? "",
       // oxlint-disable-next-line typescript/no-explicit-any
       parameters: func.parameters as any,
-      execute: async (...args: ToolExecuteArgs): Promise<AgentToolResult<unknown>> => {
-        const { toolCallId, params } = splitToolExecuteArgs(args);
+      execute: async (
+        toolCallId,
+        params,
+        _signal: AbortSignal | undefined,
+        _onUpdate: AgentToolUpdateCallback<unknown> | undefined,
+        _ctx,
+      ): Promise<AgentToolResult<unknown>> => {
         const outcome = await runBeforeToolCallHook({
           toolName: func.name,
           params,
