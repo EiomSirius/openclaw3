@@ -15,6 +15,7 @@ import {
   updateSessionStoreEntry,
 } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
+import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { buildThreadingToolContext, resolveEnforceFinalTag } from "./agent-runner-utils.js";
 import {
@@ -37,10 +38,10 @@ export async function runMemoryFlushIfNeeded(params: {
   sessionKey?: string;
   storePath?: string;
   isHeartbeat: boolean;
-}): Promise<SessionEntry | undefined> {
+}): Promise<{ entry: SessionEntry | undefined; hookMessages: string[] }> {
   const memoryFlushSettings = resolveMemoryFlushSettings(params.cfg);
   if (!memoryFlushSettings) {
-    return params.sessionEntry;
+    return { entry: params.sessionEntry, hookMessages: [] };
   }
 
   const memoryFlushWritable = (() => {
@@ -58,15 +59,17 @@ export async function runMemoryFlushIfNeeded(params: {
     return sandboxCfg.workspaceAccess === "rw";
   })();
 
+  const entryForFlush =
+    params.sessionEntry ??
+    (params.sessionKey ? params.sessionStore?.[params.sessionKey] : undefined);
+
   const shouldFlushMemory =
     memoryFlushSettings &&
     memoryFlushWritable &&
     !params.isHeartbeat &&
     !isCliProvider(params.followupRun.run.provider, params.cfg) &&
     shouldRunMemoryFlush({
-      entry:
-        params.sessionEntry ??
-        (params.sessionKey ? params.sessionStore?.[params.sessionKey] : undefined),
+      entry: entryForFlush,
       contextWindowTokens: resolveMemoryFlushContextWindowTokens({
         modelId: params.followupRun.run.model ?? params.defaultModel,
         agentCfgContextTokens: params.agentCfgContextTokens,
@@ -76,7 +79,25 @@ export async function runMemoryFlushIfNeeded(params: {
     });
 
   if (!shouldFlushMemory) {
-    return params.sessionEntry;
+    return { entry: params.sessionEntry, hookMessages: [] };
+  }
+
+  // Lifecycle hook: Memory Flush Start
+  // Only fires when sessionKey is present (agent lifecycle event requires session context)
+  let flushHookMessages: string[] = [];
+  if (params.sessionKey) {
+    // Report the same totalTokens that triggered shouldRunMemoryFlush decision.
+    // Omit contextTokensUsed if not available rather than defaulting to 0.
+    const context: Record<string, unknown> = {
+      sessionId: params.followupRun.run.sessionId,
+      reason: "context_limit",
+    };
+    if (entryForFlush?.totalTokens !== undefined) {
+      context.contextTokensUsed = entryForFlush.totalTokens;
+    }
+    const hookEvent = createInternalHookEvent("agent", "flush", params.sessionKey, context);
+    await triggerInternalHook(hookEvent);
+    flushHookMessages = hookEvent.messages;
   }
 
   let activeSessionEntry = params.sessionEntry;
@@ -197,5 +218,5 @@ export async function runMemoryFlushIfNeeded(params: {
     logVerbose(`memory flush run failed: ${String(err)}`);
   }
 
-  return activeSessionEntry;
+  return { entry: activeSessionEntry, hookMessages: flushHookMessages };
 }

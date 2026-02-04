@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type {
   CommandHandler,
   CommandHandlerResult,
@@ -74,22 +75,33 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
   // Trigger internal hook for reset/new commands
   if (resetRequested && params.command.isAuthorizedSender) {
     const commandAction = resetMatch?.[1] ?? "new";
-    const hookEvent = createInternalHookEvent("command", commandAction, params.sessionKey ?? "", {
-      sessionEntry: params.sessionEntry,
-      previousSessionEntry: params.previousSessionEntry,
+    // Use stable fallback key for non-persisted flows so command hooks always fire
+    // Hash From/To to avoid PII in hook routing keys
+    const fallbackKey = params.sessionKey
+      ? null
+      : `command:${params.ctx.Provider || "unknown"}:${crypto
+          .createHash("sha256")
+          .update(`${params.ctx.From || ""}:${params.ctx.To || ""}`)
+          .digest("hex")
+          .slice(0, 16)}`;
+    const hookSessionKey = params.sessionKey || fallbackKey || "command:unknown";
+    const hookEvent = createInternalHookEvent("command", commandAction, hookSessionKey, {
+      sessionEntry: params.sessionEntry ? structuredClone(params.sessionEntry) : undefined,
+      previousSessionEntry: params.previousSessionEntry
+        ? structuredClone(params.previousSessionEntry)
+        : undefined,
       commandSource: params.command.surface,
       senderId: params.command.senderId,
-      cfg: params.cfg, // Pass config for LLM slug generation
     });
     await triggerInternalHook(hookEvent);
 
     // Send hook messages immediately if present
     if (hookEvent.messages.length > 0) {
-      // Use OriginatingChannel/To if available, otherwise fall back to command channel/from
+      // Use OriginatingChannel if available, otherwise fall back to command channel
       // oxlint-disable-next-line typescript/no-explicit-any
       const channel = params.ctx.OriginatingChannel || (params.command.channel as any);
-      // For replies, use 'from' (the sender) not 'to' (which might be the bot itself)
-      const to = params.ctx.OriginatingTo || params.command.from || params.command.to;
+      // Prefer sender address (from) over bot address (to/OriginatingTo)
+      const to = params.command.from || params.ctx.OriginatingTo || params.command.to;
 
       if (channel && to) {
         const hookReply = { text: hookEvent.messages.join("\n\n") };
@@ -97,11 +109,15 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
           payload: hookReply,
           channel: channel,
           to: to,
-          sessionKey: params.sessionKey,
+          sessionKey: hookSessionKey,
           accountId: params.ctx.AccountId,
           threadId: params.ctx.MessageThreadId,
           cfg: params.cfg,
         });
+      } else {
+        logVerbose(
+          `Hook messages for ${commandAction} dropped: missing ${!channel ? "channel" : "to"} (hook output is best-effort depending on routing context)`,
+        );
       }
     }
   }

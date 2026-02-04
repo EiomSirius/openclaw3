@@ -230,9 +230,49 @@ Triggered when agent commands are issued:
 - **`command:reset`**: When `/reset` command is issued
 - **`command:stop`**: When `/stop` command is issued
 
+### Session Events
+
+Triggered during session lifecycle when session persistence is enabled (requires a valid `sessionKey`):
+
+- **`session:start`**: When a new session begins (both user-initiated and auto-recovery)
+- **`session:end`**: When the old session is terminated (auto-recovery resets only)
+- **`session:reset`**: Emitted after `session:end` during resets to provide transition context (auto-recovery resets only)
+
+**Context includes**:
+
+- `sessionId`: The session ID (present in current implementation; for `session:reset`, equals `newSessionId`)
+- `oldSessionId` and `newSessionId`: (for `session:reset` only) The session transition (both present in current implementation)
+
+**Note:** While current implementation guards ensure these IDs are present when events fire, hooks should handle missing values defensively.
+
+**Lifecycle patterns**:
+
+- **User-initiated reset** (`/new` or `/reset`): `command:new` or `command:reset` fires immediately; `session:start` fires when the subsequent agent turn runs
+- **Auto-recovery reset** (compaction failure, role-ordering conflict): `session:end` → `session:reset` fire during reset; `session:start` fires when the next agent turn runs
+
 ### Agent Events
 
+Triggered during agent execution when session persistence is enabled (requires a valid `sessionKey`):
+
 - **`agent:bootstrap`**: Before workspace bootstrap files are injected (hooks may mutate `context.bootstrapFiles`)
+- **`agent:reply`**: After each agent turn completes with user input or assistant output (requires at least one of `input` or `output` to be non-empty; does not fire for completely empty turns; hooks may add messages)
+- **`agent:flush`**: When memory flush starts (before the flush operation runs; context nearing token limit)
+
+**Context for `agent:reply` includes**:
+
+- `sessionId`: Current session ID
+- `input`: User's input message (may be empty string when only output is present)
+- `output`: Assistant's response (may be empty string when only input is present)
+- `turnId`: Unique turn identifier
+- `senderId`: ID of the message sender
+
+**Note:** Hooks can add messages to `event.messages` which will be prepended to the agent's response.
+
+**Context for `agent:flush` includes**:
+
+- `sessionId`: Current session ID
+- `contextTokensUsed` (optional): Last persisted token count that triggered the flush (best-effort; omitted if unavailable)
+- `reason`: Reason for flush (e.g., "context_limit")
 
 ### Gateway Events
 
@@ -250,11 +290,11 @@ These hooks are not event-stream listeners; they let plugins synchronously adjus
 
 Planned event types:
 
-- **`session:start`**: When a new session begins
-- **`session:end`**: When a session ends
 - **`agent:error`**: When an agent encounters an error
 - **`message:sent`**: When a message is sent
 - **`message:received`**: When a message is received
+
+**Note**: Previously planned `session:start` and `session:end` events are now implemented (see Session Events above). Additionally, `session:reset` was added to track session transitions.
 
 ## Creating Custom Hooks
 
