@@ -336,7 +336,7 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
     setAbortMemory(params.command.abortKey, true);
   }
 
-  // Trigger internal hook for stop command (only if persistence succeeded)
+  // Trigger internal hook for stop command (fires regardless of persistence outcome)
   // Use stable fallback key for non-persisted flows so command hooks always fire
   // Hash From/To to avoid PII in hook routing keys
   const fallbackKey =
@@ -350,17 +350,16 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
   const sessionKeyForHook =
     abortTarget.key || params.sessionKey || fallbackKey || "command:unknown";
   let hookMessages: string[] = [];
-  if (!persistenceFailed) {
-    const entry = abortTarget.entry ?? params.sessionEntry;
-    const hookEvent = createInternalHookEvent("command", "stop", sessionKeyForHook, {
-      sessionEntry: entry ? structuredClone(entry) : undefined,
-      sessionId: abortTarget.sessionId,
-      commandSource: params.command.surface,
-      senderId: params.command.senderId,
-    });
-    await triggerInternalHook(hookEvent);
-    hookMessages = hookEvent.messages;
-  }
+  const entry = abortTarget.entry ?? params.sessionEntry;
+  const hookEvent = createInternalHookEvent("command", "stop", sessionKeyForHook, {
+    sessionEntry: entry ? structuredClone(entry) : undefined,
+    sessionId: abortTarget.sessionId,
+    commandSource: params.command.surface,
+    senderId: params.command.senderId,
+    persistenceFailed,
+  });
+  await triggerInternalHook(hookEvent);
+  hookMessages = hookEvent.messages;
 
   const { stopped } = stopSubagentsForRequester({
     cfg: params.cfg,

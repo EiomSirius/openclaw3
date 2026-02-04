@@ -18,6 +18,7 @@ import {
   updateSessionStore,
   updateSessionStoreEntry,
 } from "../../config/sessions.js";
+import { logVerbose } from "../../globals.js";
 import { createInternalHookEvent, triggerInternalHook } from "../../hooks/internal-hooks.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -303,16 +304,16 @@ export async function runReplyAgent(params: {
           fs.unlinkSync(candidate);
           deletedCount++;
         } catch (err) {
-          // Best-effort cleanup - log failures for debugging
-          defaultRuntime.error(
-            `Failed to delete transcript ${candidate}: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          // Best-effort cleanup - only log unexpected failures (skip ENOENT)
+          if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+            defaultRuntime.error(
+              `Failed to delete transcript ${candidate}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
         }
       }
       if (deletedCount > 0) {
-        defaultRuntime.error(
-          `Cleaned up ${deletedCount} transcript(s) for session ${prevSessionId}`,
-        );
+        logVerbose(`Cleaned up ${deletedCount} transcript(s) for session ${prevSessionId}`);
       }
     }
 

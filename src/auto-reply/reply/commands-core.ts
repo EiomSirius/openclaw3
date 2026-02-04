@@ -109,7 +109,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
           payload: hookReply,
           channel: channel,
           to: to,
-          sessionKey: params.sessionKey,
+          sessionKey: hookSessionKey,
           accountId: params.ctx.AccountId,
           threadId: params.ctx.MessageThreadId,
           cfg: params.cfg,
