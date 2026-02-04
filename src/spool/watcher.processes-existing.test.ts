@@ -7,6 +7,15 @@ import { withTempHome as withTempHomeBase } from "../../test/helpers/temp-home.j
 import { createSpoolWatcher, type SpoolWatcherLogger } from "./watcher.js";
 import { buildSpoolEvent, writeSpoolEvent } from "./writer.js";
 
+// Per-test timeout: fail fast instead of hanging CI
+const TEST_TIMEOUT = 15_000;
+
+// Extra delay for Windows to release file handles after watcher.stop()
+const WINDOWS_CLEANUP_DELAY = process.platform === "win32" ? 500 : 100;
+
+// Longer waits for CI environments (especially Windows)
+const CI_WAIT_MULTIPLIER = process.env.CI ? 2 : 1;
+
 // Mock the dispatcher to avoid running actual agent turns
 vi.mock("./dispatcher.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./dispatcher.js")>();
@@ -36,6 +45,15 @@ function createMockLogger(): SpoolWatcherLogger & { logs: { level: string; msg: 
   };
 }
 
+/**
+ * Stop watcher with platform-appropriate cleanup delay.
+ * Windows needs extra time to release file handles.
+ */
+async function stopWatcherSafely(watcher: ReturnType<typeof createSpoolWatcher>): Promise<void> {
+  await watcher.stop();
+  await new Promise((resolve) => setTimeout(resolve, WINDOWS_CLEANUP_DELAY));
+}
+
 const mockDeps = {} as CliDeps;
 
 describe("spool watcher - processes existing files on startup", () => {
@@ -52,147 +70,164 @@ describe("spool watcher - processes existing files on startup", () => {
     vi.restoreAllMocks();
   });
 
-  it("processes existing events when watcher starts", async () => {
-    await withTempHome(async (home) => {
-      const eventsDir = path.join(home, ".openclaw", "spool", "events");
-      await fs.mkdir(eventsDir, { recursive: true });
+  it(
+    "processes existing events when watcher starts",
+    async () => {
+      await withTempHome(async (home) => {
+        const eventsDir = path.join(home, ".openclaw", "spool", "events");
+        await fs.mkdir(eventsDir, { recursive: true });
 
-      // Create some existing events
-      const event1 = buildSpoolEvent({
-        version: 1,
-        payload: { kind: "agentTurn", message: "Existing event 1" },
+        // Create some existing events
+        const event1 = buildSpoolEvent({
+          version: 1,
+          payload: { kind: "agentTurn", message: "Existing event 1" },
+        });
+        const event2 = buildSpoolEvent({
+          version: 1,
+          payload: { kind: "agentTurn", message: "Existing event 2" },
+        });
+
+        await writeSpoolEvent(event1);
+        await writeSpoolEvent(event2);
+
+        const logger = createMockLogger();
+        const results: SpoolDispatchResult[] = [];
+
+        const watcher = createSpoolWatcher({
+          deps: mockDeps,
+          log: logger,
+          onEvent: (result) => results.push(result),
+        });
+
+        await watcher.start();
+
+        // Wait for chokidar to detect files and debounce to trigger
+        // CI environments may need more time due to slower file systems
+        await new Promise((resolve) => setTimeout(resolve, 1000 * CI_WAIT_MULTIPLIER));
+
+        await stopWatcherSafely(watcher);
+
+        // Both events should have been dispatched
+        expect(dispatchSpoolEventFile).toHaveBeenCalledTimes(2);
+        expect(results).toHaveLength(2);
       });
-      const event2 = buildSpoolEvent({
-        version: 1,
-        payload: { kind: "agentTurn", message: "Existing event 2" },
+    },
+    TEST_TIMEOUT,
+  );
+
+  it(
+    "logs watching directory on start",
+    async () => {
+      await withTempHome(async (_home) => {
+        const logger = createMockLogger();
+
+        const watcher = createSpoolWatcher({
+          deps: mockDeps,
+          log: logger,
+        });
+
+        await watcher.start();
+        await stopWatcherSafely(watcher);
+
+        const watchingLog = logger.logs.find((l) => l.msg.includes("watching"));
+        expect(watchingLog).toBeDefined();
+        // Use path.join for cross-platform path comparison
+        expect(watchingLog?.msg).toContain(path.join("spool", "events"));
       });
+    },
+    TEST_TIMEOUT,
+  );
 
-      await writeSpoolEvent(event1);
-      await writeSpoolEvent(event2);
+  it(
+    "processExisting() adds all events to queue",
+    async () => {
+      await withTempHome(async (home) => {
+        const eventsDir = path.join(home, ".openclaw", "spool", "events");
+        await fs.mkdir(eventsDir, { recursive: true });
 
-      const logger = createMockLogger();
-      const results: SpoolDispatchResult[] = [];
+        const logger = createMockLogger();
 
-      const watcher = createSpoolWatcher({
-        deps: mockDeps,
-        log: logger,
-        onEvent: (result) => results.push(result),
+        const watcher = createSpoolWatcher({
+          deps: mockDeps,
+          log: logger,
+        });
+
+        // Start watcher first (no events exist yet)
+        await watcher.start();
+
+        // Wait for initial scan to complete
+        await new Promise((resolve) => setTimeout(resolve, 300 * CI_WAIT_MULTIPLIER));
+
+        // Clear any calls from startup
+        vi.mocked(dispatchSpoolEventFile).mockClear();
+
+        // Now create events AFTER watcher is running but before processExisting
+        // We need to wait for chokidar to detect them, then call processExisting
+        const event1 = buildSpoolEvent({
+          version: 1,
+          payload: { kind: "agentTurn", message: "Event 1" },
+        });
+        const event2 = buildSpoolEvent({
+          version: 1,
+          payload: { kind: "agentTurn", message: "Event 2" },
+        });
+        const event3 = buildSpoolEvent({
+          version: 1,
+          payload: { kind: "agentTurn", message: "Event 3" },
+        });
+
+        await writeSpoolEvent(event1);
+        await writeSpoolEvent(event2);
+        await writeSpoolEvent(event3);
+
+        // Wait for chokidar to pick up the files and process them
+        // CI environments may need more time due to slower file systems
+        await new Promise((resolve) => setTimeout(resolve, 1000 * CI_WAIT_MULTIPLIER));
+
+        await stopWatcherSafely(watcher);
+
+        // All three events should be processed (by chokidar watching)
+        expect(dispatchSpoolEventFile).toHaveBeenCalledTimes(3);
       });
+    },
+    TEST_TIMEOUT,
+  );
 
-      await watcher.start();
+  it(
+    "skips temp files during processing",
+    async () => {
+      await withTempHome(async (home) => {
+        const eventsDir = path.join(home, ".openclaw", "spool", "events");
+        await fs.mkdir(eventsDir, { recursive: true });
 
-      // Wait for chokidar to detect files and debounce to trigger
-      // CI environments may need more time due to slower file systems
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Create a regular event
+        const event = buildSpoolEvent({
+          version: 1,
+          payload: { kind: "agentTurn", message: "Regular event" },
+        });
+        await writeSpoolEvent(event);
 
-      await watcher.stop();
+        // Create a temp file (should be skipped)
+        const tempFile = path.join(eventsDir, "abc.tmp.json");
+        await fs.writeFile(tempFile, JSON.stringify({ version: 1 }));
 
-      // Both events should have been dispatched
-      expect(dispatchSpoolEventFile).toHaveBeenCalledTimes(2);
-      expect(results).toHaveLength(2);
-    });
-  });
+        const logger = createMockLogger();
 
-  it("logs watching directory on start", async () => {
-    await withTempHome(async (_home) => {
-      const logger = createMockLogger();
+        const watcher = createSpoolWatcher({
+          deps: mockDeps,
+          log: logger,
+        });
 
-      const watcher = createSpoolWatcher({
-        deps: mockDeps,
-        log: logger,
+        await watcher.start();
+        await new Promise((resolve) => setTimeout(resolve, 500 * CI_WAIT_MULTIPLIER));
+        await stopWatcherSafely(watcher);
+
+        // Only the regular event should be dispatched
+        expect(dispatchSpoolEventFile).toHaveBeenCalledTimes(1);
+        const calls = vi.mocked(dispatchSpoolEventFile).mock.calls;
+        expect(calls[0][0].filePath).toContain(event.id);
       });
-
-      await watcher.start();
-      await watcher.stop();
-
-      const watchingLog = logger.logs.find((l) => l.msg.includes("watching"));
-      expect(watchingLog).toBeDefined();
-      expect(watchingLog?.msg).toContain("spool/events");
-    });
-  });
-
-  it("processExisting() adds all events to queue", async () => {
-    await withTempHome(async (home) => {
-      const eventsDir = path.join(home, ".openclaw", "spool", "events");
-      await fs.mkdir(eventsDir, { recursive: true });
-
-      const logger = createMockLogger();
-
-      const watcher = createSpoolWatcher({
-        deps: mockDeps,
-        log: logger,
-      });
-
-      // Start watcher first (no events exist yet)
-      await watcher.start();
-
-      // Wait for initial scan to complete
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      // Clear any calls from startup
-      vi.mocked(dispatchSpoolEventFile).mockClear();
-
-      // Now create events AFTER watcher is running but before processExisting
-      // We need to wait for chokidar to detect them, then call processExisting
-      const event1 = buildSpoolEvent({
-        version: 1,
-        payload: { kind: "agentTurn", message: "Event 1" },
-      });
-      const event2 = buildSpoolEvent({
-        version: 1,
-        payload: { kind: "agentTurn", message: "Event 2" },
-      });
-      const event3 = buildSpoolEvent({
-        version: 1,
-        payload: { kind: "agentTurn", message: "Event 3" },
-      });
-
-      await writeSpoolEvent(event1);
-      await writeSpoolEvent(event2);
-      await writeSpoolEvent(event3);
-
-      // Wait for chokidar to pick up the files and process them
-      // CI environments may need more time due to slower file systems
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      await watcher.stop();
-
-      // All three events should be processed (by chokidar watching)
-      expect(dispatchSpoolEventFile).toHaveBeenCalledTimes(3);
-    });
-  });
-
-  it("skips temp files during processing", async () => {
-    await withTempHome(async (home) => {
-      const eventsDir = path.join(home, ".openclaw", "spool", "events");
-      await fs.mkdir(eventsDir, { recursive: true });
-
-      // Create a regular event
-      const event = buildSpoolEvent({
-        version: 1,
-        payload: { kind: "agentTurn", message: "Regular event" },
-      });
-      await writeSpoolEvent(event);
-
-      // Create a temp file (should be skipped)
-      const tempFile = path.join(eventsDir, "abc.tmp.json");
-      await fs.writeFile(tempFile, JSON.stringify({ version: 1 }));
-
-      const logger = createMockLogger();
-
-      const watcher = createSpoolWatcher({
-        deps: mockDeps,
-        log: logger,
-      });
-
-      await watcher.start();
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await watcher.stop();
-
-      // Only the regular event should be dispatched
-      expect(dispatchSpoolEventFile).toHaveBeenCalledTimes(1);
-      const calls = vi.mocked(dispatchSpoolEventFile).mock.calls;
-      expect(calls[0][0].filePath).toContain(event.id);
-    });
-  });
+    },
+    TEST_TIMEOUT,
+  );
 });
