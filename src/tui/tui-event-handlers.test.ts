@@ -8,6 +8,7 @@ type MockChatLog = {
   addSystem: ReturnType<typeof vi.fn>;
   updateAssistant: ReturnType<typeof vi.fn>;
   finalizeAssistant: ReturnType<typeof vi.fn>;
+  dropAssistant: ReturnType<typeof vi.fn>;
 };
 
 describe("tui-event-handlers: handleAgentEvent", () => {
@@ -41,6 +42,7 @@ describe("tui-event-handlers: handleAgentEvent", () => {
       addSystem: vi.fn(),
       updateAssistant: vi.fn(),
       finalizeAssistant: vi.fn(),
+      dropAssistant: vi.fn(),
     };
     const tui = { requestRender: vi.fn() };
     const setActivityStatus = vi.fn();
@@ -223,5 +225,53 @@ describe("tui-event-handlers: handleAgentEvent", () => {
 
     expect(setActivityStatus).not.toHaveBeenCalled();
     expect(tui.requestRender).not.toHaveBeenCalled();
+  });
+
+  it("suppresses display when final message is NO_REPLY", () => {
+    const state = makeState({ activeChatRunId: null });
+    const { chatLog, tui, setActivityStatus } = makeContext(state);
+    const { handleChatEvent } = createEventHandlers({
+      // oxlint-disable-next-line typescript/no-explicit-any
+      chatLog: chatLog as any,
+      // oxlint-disable-next-line typescript/no-explicit-any
+      tui: tui as any,
+      state,
+      setActivityStatus,
+    });
+
+    handleChatEvent({
+      runId: "run-silent",
+      sessionKey: state.currentSessionKey,
+      state: "final",
+      message: { content: "NO_REPLY" },
+    });
+
+    expect(chatLog.dropAssistant).toHaveBeenCalledWith("run-silent");
+    expect(chatLog.finalizeAssistant).not.toHaveBeenCalled();
+    expect(setActivityStatus).toHaveBeenCalledWith("idle");
+    expect(state.activeChatRunId).toBeNull();
+  });
+
+  it("displays normal messages that are not NO_REPLY", () => {
+    const state = makeState({ activeChatRunId: null });
+    const { chatLog, tui, setActivityStatus } = makeContext(state);
+    const { handleChatEvent } = createEventHandlers({
+      // oxlint-disable-next-line typescript/no-explicit-any
+      chatLog: chatLog as any,
+      // oxlint-disable-next-line typescript/no-explicit-any
+      tui: tui as any,
+      state,
+      setActivityStatus,
+    });
+
+    handleChatEvent({
+      runId: "run-normal",
+      sessionKey: state.currentSessionKey,
+      state: "final",
+      message: { content: "Hello, how can I help?" },
+    });
+
+    expect(chatLog.dropAssistant).not.toHaveBeenCalled();
+    expect(chatLog.finalizeAssistant).toHaveBeenCalled();
   });
 });
