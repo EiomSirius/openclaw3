@@ -8,6 +8,8 @@ import { optimizeImageToPng } from "../media/image-ops.js";
 import { loadWebMedia, loadWebMediaRaw, optimizeImageToJpeg } from "./media.js";
 
 const tmpFiles: string[] = [];
+const localRoots = [os.tmpdir()];
+const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
 async function writeTempFile(buffer: Buffer, ext: string): Promise<string> {
   const file = path.join(
@@ -29,8 +31,12 @@ function buildDeterministicBytes(length: number): Buffer {
   return buffer;
 }
 
+function loadLocalMedia(file: string, cap?: number) {
+  return loadWebMedia(file, cap, { localRoots });
+}
+
 afterEach(async () => {
-  await Promise.all(tmpFiles.map((file) => fs.rm(file, { force: true })));
+  await Promise.all(tmpFiles.map((file) => fs.rm(file, { force: true, recursive: true })));
   tmpFiles.length = 0;
   vi.restoreAllMocks();
 });
@@ -63,7 +69,7 @@ describe("web media loading", () => {
     const file = await writeTempFile(buffer, ".jpg");
 
     const cap = Math.floor(buffer.length * 0.8);
-    const result = await loadWebMedia(file, cap);
+    const result = await loadLocalMedia(file, cap);
 
     expect(result.kind).toBe("image");
     expect(result.buffer.length).toBeLessThanOrEqual(cap);
@@ -78,7 +84,7 @@ describe("web media loading", () => {
       .toBuffer();
     const wrongExt = await writeTempFile(pngBuffer, ".bin");
 
-    const result = await loadWebMedia(wrongExt, 1024 * 1024);
+    const result = await loadLocalMedia(wrongExt, 1024 * 1024);
 
     expect(result.kind).toBe("image");
     expect(result.contentType).toBe("image/jpeg");
@@ -93,7 +99,9 @@ describe("web media loading", () => {
       status: 200,
     } as Response);
 
-    const result = await loadWebMedia("https://example.com/download", 1024 * 1024);
+    const result = await loadWebMedia("https://example.com/download", 1024 * 1024, {
+      lookupFn: publicLookup,
+    });
 
     expect(result.kind).toBe("document");
     expect(result.contentType).toBe("application/pdf");
@@ -113,9 +121,9 @@ describe("web media loading", () => {
       url: "https://example.com/missing.jpg",
     } as Response);
 
-    await expect(loadWebMedia("https://example.com/missing.jpg", 1024 * 1024)).rejects.toThrow(
-      /Failed to fetch media from https:\/\/example\.com\/missing\.jpg.*HTTP 404/i,
-    );
+    await expect(
+      loadWebMedia("https://example.com/missing.jpg", 1024 * 1024, { lookupFn: publicLookup }),
+    ).rejects.toThrow(/Failed to fetch media from https:\/\/example\.com\/missing\.jpg.*HTTP 404/i);
 
     fetchMock.mockRestore();
   });
@@ -155,7 +163,9 @@ describe("web media loading", () => {
       status: 200,
     } as Response);
 
-    const result = await loadWebMedia("https://example.com/download?id=1", 1024 * 1024);
+    const result = await loadWebMedia("https://example.com/download?id=1", 1024 * 1024, {
+      lookupFn: publicLookup,
+    });
 
     expect(result.kind).toBe("document");
     expect(result.fileName).toBe("report.pdf");
@@ -199,7 +209,7 @@ describe("web media loading", () => {
 
     const file = await writeTempFile(gifBuffer, ".gif");
 
-    const result = await loadWebMedia(file, 1024 * 1024);
+    const result = await loadLocalMedia(file, 1024 * 1024);
 
     expect(result.kind).toBe("image");
     expect(result.contentType).toBe("image/gif");
@@ -222,7 +232,9 @@ describe("web media loading", () => {
       status: 200,
     } as Response);
 
-    const result = await loadWebMedia("https://example.com/animation.gif", 1024 * 1024);
+    const result = await loadWebMedia("https://example.com/animation.gif", 1024 * 1024, {
+      lookupFn: publicLookup,
+    });
 
     expect(result.kind).toBe("image");
     expect(result.contentType).toBe("image/gif");
@@ -245,7 +257,7 @@ describe("web media loading", () => {
 
     const file = await writeTempFile(buffer, ".png");
 
-    const result = await loadWebMedia(file, 1024 * 1024);
+    const result = await loadLocalMedia(file, 1024 * 1024);
 
     expect(result.kind).toBe("image");
     expect(result.contentType).toBe("image/png");
@@ -285,10 +297,62 @@ describe("web media loading", () => {
 
     const file = await writeTempFile(pngBuffer, ".png");
 
-    const result = await loadWebMedia(file, cap);
+    const result = await loadLocalMedia(file, cap);
 
     expect(result.kind).toBe("image");
     expect(result.contentType).toBe("image/jpeg");
     expect(result.buffer.length).toBeLessThanOrEqual(cap);
+  });
+
+  it("rejects local paths outside allowed roots unless opted in", async () => {
+    const buffer = Buffer.from("hello");
+    const file = await writeTempFile(buffer, ".txt");
+
+    const otherRoot = path.join(os.tmpdir(), "openclaw-media-other");
+    await expect(loadWebMedia(file, 1024 * 1024, { localRoots: [otherRoot] })).rejects.toThrow(
+      /outside allowed roots/i,
+    );
+
+    const localResult = await loadWebMedia(file, 1024 * 1024, { localRoots });
+    expect(localResult.buffer.toString()).toBe("hello");
+
+    const anyResult = await loadWebMedia(file, 1024 * 1024, { allowAnyLocal: true });
+    expect(anyResult.buffer.toString()).toBe("hello");
+  });
+
+  it("accepts sandbox-style relative paths under allowed roots", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-media-root-"));
+    tmpFiles.push(root);
+    const inboundDir = path.join(root, "media", "inbound");
+    await fs.mkdir(inboundDir, { recursive: true });
+    const filePath = path.join(inboundDir, "file.txt");
+    await fs.writeFile(filePath, "hello");
+
+    const result = await loadWebMedia("media/inbound/file.txt", 1024 * 1024, {
+      localRoots: [root],
+    });
+
+    expect(result.buffer.toString()).toBe("hello");
+  });
+
+  it("accepts absolute paths inside allowed roots", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-media-abs-"));
+    tmpFiles.push(root);
+    const filePath = path.join(root, "file.txt");
+    await fs.writeFile(filePath, "hello");
+
+    const result = await loadWebMedia(filePath, 1024 * 1024, {
+      localRoots: [root],
+    });
+
+    expect(result.buffer.toString()).toBe("hello");
+  });
+
+  it("blocks traversal outside allowed roots", async () => {
+    const traversal = path.join("..", "etc", "passwd");
+
+    await expect(
+      loadWebMedia(traversal, 1024 * 1024, { localRoots: [os.tmpdir()] }),
+    ).rejects.toThrow(/outside allowed roots/i);
   });
 });

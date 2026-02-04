@@ -1,8 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SsrFPolicy } from "../infra/net/ssrf.js";
+import { assertSandboxPath } from "../agents/sandbox-paths.js";
+import { loadConfig } from "../config/config.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
+import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import { type MediaKind, maxBytesForKind, mediaKindFromMime } from "../media/constants.js";
 import { fetchRemoteMedia } from "../media/fetch.js";
 import {
@@ -11,6 +13,7 @@ import {
   optimizeImageToPng,
   resizeToJpeg,
 } from "../media/image-ops.js";
+import { resolveMediaLocalRoots } from "../media/local-roots.js";
 import { detectMime, extensionForMime } from "../media/mime.js";
 import { resolveUserPath } from "../utils.js";
 
@@ -25,6 +28,11 @@ type WebMediaOptions = {
   maxBytes?: number;
   optimizeImages?: boolean;
   ssrfPolicy?: SsrFPolicy;
+  allowAnyLocal?: boolean;
+  localRoots?: string[];
+  agentId?: string;
+  lookupFn?: typeof import("node:dns/promises").lookup;
+  maxRedirects?: number;
 };
 
 const HEIC_MIME_RE = /^image\/hei[cf]$/i;
@@ -93,6 +101,43 @@ function logOptimizedImage(params: { originalSize: number; optimized: OptimizedI
   logVerbose(
     `Optimized media from ${formatMb(params.originalSize)}MB to ${formatMb(params.optimized.optimizedSize)}MB (side≤${params.optimized.resizeSide}px, q=${params.optimized.quality})`,
   );
+}
+
+function resolveAllowedLocalRoots(options: WebMediaOptions): string[] | null {
+  if (options.allowAnyLocal) {
+    return null;
+  }
+  if (Array.isArray(options.localRoots) && options.localRoots.length > 0) {
+    return options.localRoots;
+  }
+  return resolveMediaLocalRoots(loadConfig(), options.agentId);
+}
+
+async function resolveLocalMediaPath(mediaUrl: string, roots: string[]): Promise<string> {
+  const errors: string[] = [];
+  for (const root of roots) {
+    try {
+      const validated = await assertSandboxPath({ filePath: mediaUrl, cwd: root, root });
+      const stat = await fs.stat(validated.resolved).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") {
+          return null;
+        }
+        throw err;
+      });
+      if (!stat) {
+        errors.push(`Not found under ${root}`);
+        continue;
+      }
+      if (!stat.isFile()) {
+        errors.push(`Not a file under ${root}`);
+        continue;
+      }
+      return validated.resolved;
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  throw new Error(`Local media path is outside allowed roots. Checked ${roots.length} root(s).`);
 }
 
 async function optimizeImageWithFallback(params: {
@@ -211,7 +256,13 @@ async function loadWebMediaInternal(
         : optimizeImages
           ? Math.max(maxBytes, defaultFetchCap)
           : maxBytes;
-    const fetched = await fetchRemoteMedia({ url: mediaUrl, maxBytes: fetchCap, ssrfPolicy });
+    const fetched = await fetchRemoteMedia({
+      url: mediaUrl,
+      maxBytes: fetchCap,
+      ssrfPolicy,
+      lookupFn: options.lookupFn,
+      maxRedirects: options.maxRedirects,
+    });
     const { buffer, contentType, fileName } = fetched;
     const kind = mediaKindFromMime(contentType);
     return await clampAndFinalize({ buffer, contentType, kind, fileName });
@@ -220,6 +271,11 @@ async function loadWebMediaInternal(
   // Expand tilde paths to absolute paths (e.g., ~/Downloads/photo.jpg)
   if (mediaUrl.startsWith("~")) {
     mediaUrl = resolveUserPath(mediaUrl);
+  }
+
+  const allowedRoots = resolveAllowedLocalRoots(options);
+  if (allowedRoots && allowedRoots.length > 0) {
+    mediaUrl = await resolveLocalMediaPath(mediaUrl, allowedRoots);
   }
 
   // Local path
@@ -244,9 +300,10 @@ async function loadWebMediaInternal(
 export async function loadWebMedia(
   mediaUrl: string,
   maxBytes?: number,
-  options?: { ssrfPolicy?: SsrFPolicy },
+  options: Omit<WebMediaOptions, "maxBytes" | "optimizeImages"> = {},
 ): Promise<WebMediaResult> {
   return await loadWebMediaInternal(mediaUrl, {
+    ...options,
     maxBytes,
     optimizeImages: true,
     ssrfPolicy: options?.ssrfPolicy,
@@ -256,9 +313,10 @@ export async function loadWebMedia(
 export async function loadWebMediaRaw(
   mediaUrl: string,
   maxBytes?: number,
-  options?: { ssrfPolicy?: SsrFPolicy },
+  options: Omit<WebMediaOptions, "maxBytes" | "optimizeImages"> = {},
 ): Promise<WebMediaResult> {
   return await loadWebMediaInternal(mediaUrl, {
+    ...options,
     maxBytes,
     optimizeImages: false,
     ssrfPolicy: options?.ssrfPolicy,
