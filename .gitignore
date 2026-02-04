@@ -8,6 +8,8 @@ pnpm-lock.yaml
 bun.lock
 bun.lockb
 coverage
+.openclaw-env/
+**/.openclaw-env/
 .pnpm-store
 .worktrees/
 .DS_Store
