@@ -395,6 +395,34 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       ]
         .filter(Boolean)
         .join(":");
+
+      // Check if reactions should trigger an agent response
+      const triggerMode = deps.reactionTriggerMode ?? "off";
+      const shouldTrigger = triggerMode === "all" || (triggerMode === "dm" && !isGroup);
+
+      if (shouldTrigger) {
+        // Dispatch reaction as an inbound message to trigger agent response
+        const senderRecipient = resolveSignalRecipient(sender);
+        if (senderRecipient) {
+          const reactionBody = `[Reacted ${emojiLabel} to message ${messageId}]`;
+          await handleSignalInboundMessage({
+            senderName,
+            senderDisplay,
+            senderRecipient,
+            senderPeerId,
+            groupId,
+            groupName,
+            isGroup,
+            bodyText: reactionBody,
+            timestamp: envelope.timestamp ?? undefined,
+            messageId: envelope.timestamp ? String(envelope.timestamp) : undefined,
+            commandAuthorized: true,
+          });
+          return;
+        }
+      }
+
+      // Passive notification only (no agent response)
       enqueueSystemEvent(text, { sessionKey: route.sessionKey, contextKey });
       return;
     }
@@ -527,7 +555,19 @@ export function createSignalEventHandler(deps: SignalEventHandlerDeps) {
       placeholder = "<media:attachment>";
     }
 
-    const bodyText = messageText || placeholder || dataMessage.quote?.text?.trim() || "";
+    // Build body text with quote context if present
+    let bodyText = messageText || placeholder || "";
+    const quote = dataMessage.quote;
+    if (quote?.text?.trim()) {
+      const quotedText = quote.text.trim();
+      if (bodyText) {
+        // Reply with quote: prepend quoted text
+        bodyText = `> ${quotedText}\n${bodyText}`;
+      } else {
+        // Quote only, no reply text
+        bodyText = quotedText;
+      }
+    }
     if (!bodyText) {
       return;
     }

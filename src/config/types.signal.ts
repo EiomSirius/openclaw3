@@ -3,11 +3,13 @@ import type {
   DmPolicy,
   GroupPolicy,
   MarkdownConfig,
+  ReplyToMode,
 } from "./types.base.js";
 import type { ChannelHeartbeatVisibilityConfig } from "./types.channels.js";
 import type { DmConfig } from "./types.messages.js";
 
 export type SignalReactionNotificationMode = "off" | "own" | "all" | "allowlist";
+export type SignalReactionTriggerMode = "off" | "dm" | "all";
 export type SignalReactionLevel = "off" | "ack" | "minimal" | "extensive";
 
 export type SignalAccountConfig = {
@@ -51,6 +53,8 @@ export type SignalAccountConfig = {
    * - "allowlist": only allow group messages from senders in groupAllowFrom/allowFrom
    */
   groupPolicy?: GroupPolicy;
+  /** Control reply/quote tagging: off (default), first, all. */
+  replyToMode?: ReplyToMode;
   /** Max group messages to keep as history context (0 disables). */
   historyLimit?: number;
   /** Max DM turns to keep as history context. */
@@ -69,6 +73,13 @@ export type SignalAccountConfig = {
   reactionNotifications?: SignalReactionNotificationMode;
   /** Allowlist for reaction notifications when mode is allowlist. */
   reactionAllowlist?: Array<string | number>;
+  /**
+   * When enabled, reactions trigger an agent response (like a message).
+   * - "off": Reactions are passive notifications only (default)
+   * - "dm": Reactions in DMs trigger responses
+   * - "all": All reactions trigger responses
+   */
+  reactionTriggerMode?: SignalReactionTriggerMode;
   /** Action toggles for message tool capabilities. */
   actions?: {
     /** Enable/disable sending reactions via message tool (default: true). */

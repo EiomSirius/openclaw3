@@ -13,6 +13,7 @@ import { signalCheck, signalRpcRequest } from "./client.js";
 import { spawnSignalDaemon } from "./daemon.js";
 import { isSignalSenderAllowed, type resolveSignalSender } from "./identity.js";
 import { createSignalEventHandler } from "./monitor/event-handler.js";
+import { parseSignalQuoteParams } from "./quote-params.js";
 import { sendMessageSignal } from "./send.js";
 import { runSignalSseLoop } from "./sse-reconnect.js";
 
@@ -239,33 +240,40 @@ async function deliverReplies(params: {
 }) {
   const { replies, target, baseUrl, account, accountId, runtime, maxBytes, textLimit, chunkMode } =
     params;
+
   for (const payload of replies) {
     const mediaList = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
     const text = payload.text ?? "";
     if (!text && mediaList.length === 0) {
       continue;
     }
+    const quoteParams = parseSignalQuoteParams(target, payload.replyToId);
     if (mediaList.length === 0) {
-      for (const chunk of chunkTextWithMode(text, textLimit, chunkMode)) {
-        await sendMessageSignal(target, chunk, {
+      const chunks = chunkTextWithMode(text, textLimit, chunkMode);
+      for (let i = 0; i < chunks.length; i++) {
+        await sendMessageSignal(target, chunks[i], {
           baseUrl,
           account,
           maxBytes,
           accountId,
+          // Only quote on the first chunk
+          ...(i === 0 ? quoteParams : {}),
         });
       }
     } else {
       let first = true;
       for (const url of mediaList) {
         const caption = first ? text : "";
-        first = false;
         await sendMessageSignal(target, caption, {
           baseUrl,
           account,
           mediaUrl: url,
           maxBytes,
           accountId,
+          // Only quote on the first message
+          ...(first ? quoteParams : {}),
         });
+        first = false;
       }
     }
     runtime.log?.(`delivered reply to ${target}`);
@@ -302,6 +310,7 @@ export async function monitorSignalProvider(opts: MonitorSignalOpts = {}): Promi
   const defaultGroupPolicy = cfg.channels?.defaults?.groupPolicy;
   const groupPolicy = accountInfo.config.groupPolicy ?? defaultGroupPolicy ?? "allowlist";
   const reactionMode = accountInfo.config.reactionNotifications ?? "own";
+  const reactionTriggerMode = accountInfo.config.reactionTriggerMode ?? "off";
   const reactionAllowlist = normalizeAllowList(accountInfo.config.reactionAllowlist);
   const mediaMaxBytes = (opts.mediaMaxMb ?? accountInfo.config.mediaMaxMb ?? 8) * 1024 * 1024;
   const ignoreAttachments = opts.ignoreAttachments ?? accountInfo.config.ignoreAttachments ?? false;
@@ -364,6 +373,7 @@ export async function monitorSignalProvider(opts: MonitorSignalOpts = {}): Promi
       groupAllowFrom,
       groupPolicy,
       reactionMode,
+      reactionTriggerMode,
       reactionAllowlist,
       mediaMaxBytes,
       ignoreAttachments,
