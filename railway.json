@@ -1,0 +1,24 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "variables": {
+    "PORT": "8080",
+    "SETUP_PASSWORD": "jouw_setup_password",
+    "OPENCLAW_GATEWAY_TOKEN": "3LpFWGOzFnh_akOA_CvYal3CFjBWfp~q",
+    "OPENCLAW_PAIRING_ADMIN_SECRET": "JEkLHz$zZa^4A2^R@IAKEc9ndW$GjZ&dUQru2NY5dtPM%92",
+    "OPENCLAW_STATE_DIR": "/data/.openclaw",
+    "OPENCLAW_WORKSPACE_DIR": "/data/workspace",
+    "OPENCLAW_TRUSTED_PROXIES": "0.0.0.0/0"
+  },
+  "volumes": [
+    {
+      "mountPath": "/data",
+      "sizeGB": 1
+    }
+  ]
+}
