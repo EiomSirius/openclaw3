@@ -1,4 +1,23 @@
-export const MAX_PAYLOAD_BYTES = 512 * 1024; // cap incoming frame size
+// Default max incoming WebSocket frame size (2MB)
+// Increased from 512KB to support larger images/files via webchat
+export const DEFAULT_MAX_PAYLOAD_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Resolve max payload size from config or use default.
+ * @param cfg OpenClaw config
+ * @returns Max payload size in bytes
+ */
+export function getMaxPayloadBytes(cfg?: { gateway?: { maxPayloadBytes?: number } }): number {
+  const configured = cfg?.gateway?.maxPayloadBytes;
+  if (typeof configured === "number" && configured > 0) {
+    return configured;
+  }
+  return DEFAULT_MAX_PAYLOAD_BYTES;
+}
+
+// Legacy constant for backward compatibility - will be deprecated
+export const MAX_PAYLOAD_BYTES = DEFAULT_MAX_PAYLOAD_BYTES;
+
 export const MAX_BUFFERED_BYTES = 1.5 * 1024 * 1024; // per-connection send buffer limit
 
 const DEFAULT_MAX_CHAT_HISTORY_MESSAGES_BYTES = 6 * 1024 * 1024; // keep history responses comfortably under client WS limits

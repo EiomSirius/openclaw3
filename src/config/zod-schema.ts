@@ -373,6 +373,7 @@ export const OpenClawSchema = z
             z.literal("tailnet"),
           ])
           .optional(),
+        maxPayloadBytes: z.number().int().positive().optional(),
         controlUi: z
           .object({
             enabled: z.boolean().optional(),

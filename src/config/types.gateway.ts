@@ -231,6 +231,11 @@ export type GatewayConfig = {
   bind?: GatewayBindMode;
   /** Custom IP address for bind="custom" mode. Fallback: 0.0.0.0. */
   customBindHost?: string;
+  /**
+   * Maximum incoming WebSocket frame size in bytes (default: 2MB).
+   * Increase this to allow larger images/files via webchat.
+   */
+  maxPayloadBytes?: number;
   controlUi?: GatewayControlUiConfig;
   auth?: GatewayAuthConfig;
   tailscale?: GatewayTailscaleConfig;

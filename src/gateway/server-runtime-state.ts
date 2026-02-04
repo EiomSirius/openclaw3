@@ -16,7 +16,7 @@ import { type CanvasHostHandler, createCanvasHostHandler } from "../canvas-host/
 import { resolveGatewayListenHosts } from "./net.js";
 import { createGatewayBroadcaster } from "./server-broadcast.js";
 import { type ChatRunEntry, createChatRunState } from "./server-chat.js";
-import { MAX_PAYLOAD_BYTES } from "./server-constants.js";
+import { getMaxPayloadBytes } from "./server-constants.js";
 import { attachGatewayUpgradeHandler, createGatewayHttpServer } from "./server-http.js";
 import { createGatewayHooksRequestHandler } from "./server/hooks.js";
 import { listenGatewayHttpServer } from "./server/http-listen.js";
@@ -145,9 +145,10 @@ export async function createGatewayRuntimeState(params: {
     throw new Error("Gateway HTTP server failed to start");
   }
 
+  const maxPayloadBytes = getMaxPayloadBytes(params.cfg);
   const wss = new WebSocketServer({
     noServer: true,
-    maxPayload: MAX_PAYLOAD_BYTES,
+    maxPayload: maxPayloadBytes,
   });
   for (const server of httpServers) {
     attachGatewayUpgradeHandler({ httpServer: server, wss, canvasHost });
