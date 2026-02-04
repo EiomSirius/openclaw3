@@ -315,7 +315,7 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
   }
   let persistenceFailed = false;
   if (abortTarget.entry && params.sessionStore && abortTarget.key) {
-    const prevEntry = { ...abortTarget.entry };
+    const prevEntry = structuredClone(abortTarget.entry);
     abortTarget.entry.abortedLastRun = true;
     abortTarget.entry.updatedAt = Date.now();
     params.sessionStore[abortTarget.key] = abortTarget.entry;
@@ -341,7 +341,7 @@ export const handleStopCommand: CommandHandler = async (params, allowTextCommand
   if (sessionKeyForHook && !persistenceFailed) {
     const entry = abortTarget.entry ?? params.sessionEntry;
     const hookEvent = createInternalHookEvent("command", "stop", sessionKeyForHook, {
-      sessionEntry: entry ? { ...entry } : undefined,
+      sessionEntry: entry ? structuredClone(entry) : undefined,
       sessionId: abortTarget.sessionId,
       commandSource: params.command.surface,
       senderId: params.command.senderId,
