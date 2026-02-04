@@ -394,6 +394,233 @@ async function buildOllamaProvider(): Promise<ProviderConfig> {
   };
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Azure AI Foundry
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const AZURE_FOUNDRY_DEFAULT_COST = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+};
+
+// Static catalog of models commonly available on Azure AI Foundry.
+// Users with custom deployment names should use explicit models.providers config.
+const AZURE_FOUNDRY_OPENAI_CATALOG: ModelDefinitionConfig[] = [
+  {
+    id: "gpt-5.2",
+    name: "GPT 5.2",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 16384,
+  },
+  {
+    id: "gpt-5.1",
+    name: "GPT 5.1",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 16384,
+  },
+  {
+    id: "gpt-5",
+    name: "GPT 5",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 16384,
+  },
+  {
+    id: "gpt-5-mini",
+    name: "GPT 5 Mini",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 128000,
+    maxTokens: 16384,
+  },
+  {
+    id: "gpt-5-nano",
+    name: "GPT 5 Nano",
+    reasoning: false,
+    input: ["text"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 128000,
+    maxTokens: 8192,
+  },
+  {
+    id: "gpt-4.1",
+    name: "GPT 4.1",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 1047576,
+    maxTokens: 32768,
+  },
+  {
+    id: "gpt-4.1-mini",
+    name: "GPT 4.1 Mini",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 1047576,
+    maxTokens: 32768,
+  },
+  {
+    id: "gpt-4.1-nano",
+    name: "GPT 4.1 Nano",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 1047576,
+    maxTokens: 32768,
+  },
+  {
+    id: "gpt-4o",
+    name: "GPT 4o",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 128000,
+    maxTokens: 16384,
+  },
+  {
+    id: "gpt-4o-mini",
+    name: "GPT 4o Mini",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 128000,
+    maxTokens: 16384,
+  },
+  {
+    id: "o3",
+    name: "o3",
+    reasoning: true,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 100000,
+  },
+  {
+    id: "o3-mini",
+    name: "o3 Mini",
+    reasoning: true,
+    input: ["text"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 100000,
+  },
+  {
+    id: "o4-mini",
+    name: "o4 Mini",
+    reasoning: true,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 100000,
+  },
+];
+
+const AZURE_FOUNDRY_ANTHROPIC_CATALOG: ModelDefinitionConfig[] = [
+  {
+    id: "claude-opus-4-5-20251101",
+    name: "Claude Opus 4.5",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
+  {
+    id: "claude-sonnet-4-5-20250929",
+    name: "Claude Sonnet 4.5",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
+  {
+    id: "claude-haiku-4-5-20251001",
+    name: "Claude Haiku 4.5",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
+  {
+    id: "claude-sonnet-4-20250514",
+    name: "Claude Sonnet 4",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
+  {
+    id: "claude-3-7-sonnet-20250219",
+    name: "Claude 3.7 Sonnet",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
+  {
+    id: "claude-3-5-sonnet-20241022",
+    name: "Claude 3.5 Sonnet",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
+  {
+    id: "claude-3-5-haiku-20241022",
+    name: "Claude 3.5 Haiku",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: AZURE_FOUNDRY_DEFAULT_COST,
+    contextWindow: 200000,
+    maxTokens: 8192,
+  },
+];
+
+interface AzureFoundryEndpoints {
+  openai?: string;
+  anthropic?: string;
+}
+
+function resolveAzureFoundryEndpoints(env: NodeJS.ProcessEnv = process.env): AzureFoundryEndpoints {
+  return {
+    openai: env.AZURE_FOUNDRY_OPENAI_ENDPOINT?.trim() || undefined,
+    anthropic: env.AZURE_FOUNDRY_ANTHROPIC_ENDPOINT?.trim() || undefined,
+  };
+}
+
+function buildAzureFoundryOpenaiProvider(endpoint: string): ProviderConfig {
+  return {
+    baseUrl: endpoint,
+    api: "openai-completions",
+    models: AZURE_FOUNDRY_OPENAI_CATALOG,
+  };
+}
+
+function buildAzureFoundryAnthropicProvider(endpoint: string): ProviderConfig {
+  return {
+    baseUrl: endpoint,
+    api: "anthropic-messages",
+    models: AZURE_FOUNDRY_ANTHROPIC_CATALOG,
+  };
+}
+
 export async function resolveImplicitProviders(params: {
   agentDir: string;
 }): Promise<ModelsConfig["providers"]> {
@@ -459,6 +686,26 @@ export async function resolveImplicitProviders(params: {
     resolveApiKeyFromProfiles({ provider: "ollama", store: authStore });
   if (ollamaKey) {
     providers.ollama = { ...(await buildOllamaProvider()), apiKey: ollamaKey };
+  }
+
+  // Azure AI Foundry - auto-discover from AZURE_FOUNDRY_*_ENDPOINT env vars
+  const azureFoundryKey =
+    resolveEnvApiKeyVarName("azure-ai-foundry") ??
+    resolveApiKeyFromProfiles({ provider: "azure-ai-foundry", store: authStore });
+  if (azureFoundryKey) {
+    const endpoints = resolveAzureFoundryEndpoints();
+    if (endpoints.openai) {
+      providers["azure-ai-foundry"] = {
+        ...buildAzureFoundryOpenaiProvider(endpoints.openai),
+        apiKey: azureFoundryKey,
+      };
+    }
+    if (endpoints.anthropic) {
+      providers["azure-ai-foundry-anthropic"] = {
+        ...buildAzureFoundryAnthropicProvider(endpoints.anthropic),
+        apiKey: azureFoundryKey,
+      };
+    }
   }
 
   return providers;

@@ -284,6 +284,14 @@ export function resolveEnvApiKey(provider: string): EnvApiKeyResult | null {
     return pick("KIMI_API_KEY") ?? pick("KIMICODE_API_KEY");
   }
 
+  if (normalized === "azure-ai-foundry" || normalized === "azure-ai-foundry-anthropic") {
+    return (
+      pick("AZURE_AI_FOUNDRY_API_KEY") ??
+      pick("AZURE_FOUNDRY_API_KEY") ??
+      pick("AZURE_OPENAI_API_KEY")
+    );
+  }
+
   const envMap: Record<string, string> = {
     openai: "OPENAI_API_KEY",
     google: "GEMINI_API_KEY",
@@ -300,6 +308,8 @@ export function resolveEnvApiKey(provider: string): EnvApiKeyResult | null {
     venice: "VENICE_API_KEY",
     mistral: "MISTRAL_API_KEY",
     opencode: "OPENCODE_API_KEY",
+    "azure-ai-foundry": "AZURE_AI_FOUNDRY_API_KEY",
+    "azure-ai-foundry-anthropic": "AZURE_AI_FOUNDRY_API_KEY",
   };
   const envVar = envMap[normalized];
   if (!envVar) {
