@@ -78,6 +78,106 @@ export type CommandOptions = {
   windowsVerbatimArguments?: boolean;
 };
 
+/**
+ * Environment variables that are explicitly allowed through even if
+ * they match sensitive patterns. These are required for npm to work
+ * with private registries.
+ */
+const NPM_ALLOWLIST = new Set([
+  "NODE_AUTH_TOKEN",
+  "NPM_TOKEN",
+  "NPM_CONFIG_TOKEN",
+  "npm_config_token",
+]);
+
+/**
+ * Sensitive environment variable patterns that should be filtered
+ * when running npm install for hooks/plugins to prevent credential
+ * exfiltration via malicious lifecycle scripts.
+ */
+const SENSITIVE_ENV_PATTERNS = [
+  // Generic sensitive patterns - match anywhere in the key name
+  /SECRET/i,
+  /PASSWORD/i,
+  /CREDENTIAL/i,
+  /API_KEY/i,
+  /PRIVATE_KEY/i,
+  /ACCESS_KEY/i,
+  // Token patterns - but exclude npm registry auth tokens (handled by allowlist)
+  /AUTH_TOKEN$/i, // Matches *_AUTH_TOKEN but NODE_AUTH_TOKEN is allowlisted
+  /ACCESS_TOKEN/i,
+  /REFRESH_TOKEN/i,
+  /BEARER_TOKEN/i,
+  /SESSION_TOKEN/i,
+  // Specific provider prefixes
+  /^OPENAI_/i,
+  /^ANTHROPIC_/i,
+  /^GOOGLE_/i,
+  /^AWS_/i,
+  /^AZURE_/i,
+  /^GITHUB_/i,
+  /^GITLAB_/i,
+  /^DISCORD_/i,
+  /^SLACK_/i,
+  /^TELEGRAM_/i,
+  /^TWILIO_/i,
+  /^SENDGRID_/i,
+  /^STRIPE_/i,
+  /^DATADOG_/i,
+  /^SENTRY_/i,
+  /^FIREBASE_/i,
+  /^SUPABASE_/i,
+  /^VERCEL_/i,
+  /^HEROKU_/i,
+  /^DIGITAL_OCEAN_/i,
+  /^CLOUDFLARE_/i,
+  /^POSTGRES_/i,
+  /^MYSQL_/i,
+  // Database connection strings
+  /^DATABASE_URL$/i,
+  /^REDIS_URL$/i,
+  /^MONGODB_URI$/i,
+];
+
+/**
+ * Sanitizes environment variables for npm install operations.
+ * Filters out sensitive credentials that could be exfiltrated by
+ * malicious lifecycle scripts (preinstall, postinstall, etc.).
+ *
+ * npm registry auth tokens (NODE_AUTH_TOKEN, NPM_TOKEN) are explicitly
+ * allowed to support private registries.
+ *
+ * This is critical for security when installing hooks or plugins
+ * from untrusted sources.
+ */
+export function sanitizeNpmInstallEnv(
+  env: Record<string, string | undefined> = process.env,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      continue;
+    }
+
+    // Allow npm registry auth tokens through (required for private registries)
+    if (NPM_ALLOWLIST.has(key)) {
+      result[key] = value;
+      continue;
+    }
+
+    // Check if key matches any sensitive pattern
+    const isSensitive = SENSITIVE_ENV_PATTERNS.some((pattern) => pattern.test(key));
+    if (isSensitive) {
+      continue;
+    }
+
+    result[key] = value;
+  }
+
+  return result;
+}
+
 export async function runCommandWithTimeout(
   argv: string[],
   optionsOrTimeout: number | CommandOptions,
