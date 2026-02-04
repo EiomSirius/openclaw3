@@ -91,16 +91,21 @@ function findInstallSpec(entry: SkillEntry, installId: string): SkillInstallSpec
   return undefined;
 }
 
-function buildNodeInstallCommand(packageName: string, prefs: SkillsInstallPreferences): string[] {
+export function buildNodeInstallCommand(
+  packageName: string,
+  prefs: SkillsInstallPreferences,
+): string[] {
+  // --ignore-scripts prevents execution of lifecycle scripts (postinstall, etc.)
+  // from untrusted packages during skill installation (CWE-506, CWE-494)
   switch (prefs.nodeManager) {
     case "pnpm":
-      return ["pnpm", "add", "-g", packageName];
+      return ["pnpm", "add", "-g", "--ignore-scripts", packageName];
     case "yarn":
-      return ["yarn", "global", "add", packageName];
+      return ["yarn", "global", "add", "--ignore-scripts", packageName];
     case "bun":
-      return ["bun", "add", "-g", packageName];
+      return ["bun", "add", "-g", "--ignore-scripts", packageName];
     default:
-      return ["npm", "install", "-g", packageName];
+      return ["npm", "install", "-g", "--ignore-scripts", packageName];
   }
 }
 

@@ -9,7 +9,7 @@ import {
   resolveArchiveKind,
   resolvePackedRootDir,
 } from "../infra/archive.js";
-import { runCommandWithTimeout } from "../process/exec.js";
+import { runCommandWithTimeout, sanitizeNpmInstallEnv } from "../process/exec.js";
 import { CONFIG_DIR, resolveUserPath } from "../utils.js";
 
 type PluginInstallLogger = {
@@ -220,6 +220,7 @@ async function installPluginFromPackageDir(params: {
     const npmRes = await runCommandWithTimeout(["npm", "install", "--omit=dev", "--silent"], {
       timeoutMs: Math.max(timeoutMs, 300_000),
       cwd: targetDir,
+      env: sanitizeNpmInstallEnv(),
     });
     if (npmRes.code !== 0) {
       if (backupDir) {
@@ -413,7 +414,7 @@ export async function installPluginFromNpmSpec(params: {
   const res = await runCommandWithTimeout(["npm", "pack", spec], {
     timeoutMs: Math.max(timeoutMs, 300_000),
     cwd: tmpDir,
-    env: { COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
+    env: { ...sanitizeNpmInstallEnv(), COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
   });
   if (res.code !== 0) {
     return {
