@@ -2,6 +2,7 @@ import type { FinalizedMsgContext } from "../../../auto-reply/templating.js";
 import type { ResolvedSlackAccount } from "../../accounts.js";
 import type { SlackMessageEvent } from "../../types.js";
 import type { PreparedSlackMessage } from "./types.js";
+import { resolveDefaultAgentId } from "../../../agents/agent-scope.js";
 import { resolveAckReaction } from "../../../agents/identity.js";
 import { hasControlCommand } from "../../../auto-reply/command-detection.js";
 import { shouldHandleTextCommands } from "../../../auto-reply/commands-registry.js";
@@ -191,6 +192,16 @@ export async function prepareSlackMessage(params: {
       id: isDirectMessage ? (message.user ?? "unknown") : message.channel,
     },
   });
+
+  // Only the default agent should handle all Slack inbound messages (DMs, channels, groups).
+  // Sub-agents should only be invoked explicitly via sessions_spawn/sessions_send.
+  const defaultAgentId = resolveDefaultAgentId(cfg);
+  if (route.agentId !== defaultAgentId) {
+    logVerbose(
+      `slack: skipping message (routed to agent:${route.agentId}, only default agent "${defaultAgentId}" handles Slack)`,
+    );
+    return null;
+  }
 
   const baseSessionKey = route.sessionKey;
   const threadContext = resolveSlackThreadContext({ message, replyToMode: ctx.replyToMode });

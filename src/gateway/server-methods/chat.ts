@@ -463,7 +463,7 @@ export const chatHandlers: GatewayRequestHandlers = {
         SessionKey: p.sessionKey,
         Provider: INTERNAL_MESSAGE_CHANNEL,
         Surface: INTERNAL_MESSAGE_CHANNEL,
-        OriginatingChannel: INTERNAL_MESSAGE_CHANNEL,
+        OriginatingChannel: undefined,  // Don't contaminate - preserve session's real channel
         ChatType: "direct",
         CommandAuthorized: true,
         MessageSid: clientRunId,
