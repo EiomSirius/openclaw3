@@ -7,9 +7,19 @@ import type { CallManager } from "./manager.js";
 import type { MediaStreamConfig } from "./media-stream.js";
 import type { VoiceCallProvider } from "./providers/base.js";
 import type { TwilioProvider } from "./providers/twilio.js";
+import type { VoiceResponseResult } from "./response-generator.js";
 import type { NormalizedEvent, WebhookContext } from "./types.js";
-import { MediaStreamHandler } from "./media-stream.js";
-import { OpenAIRealtimeSTTProvider } from "./providers/stt-openai-realtime.js";
+import { MediaStreamHandler, createSTTProvider } from "./media-stream.js";
+import { TerminalStates } from "./types.js";
+
+/**
+ * Tracks an active speculative LLM generation started on EagerEndOfTurn.
+ */
+type SpeculativeGeneration = {
+  controller: AbortController;
+  transcript: string;
+  promise: Promise<VoiceResponseResult>;
+};
 
 const MAX_WEBHOOK_BODY_BYTES = 1024 * 1024;
 
@@ -26,6 +36,9 @@ export class VoiceCallWebhookServer {
 
   /** Media stream handler for bidirectional audio (when streaming enabled) */
   private mediaStreamHandler: MediaStreamHandler | null = null;
+
+  /** Tracks active speculative LLM generations per call (for EagerEndOfTurn optimization) */
+  private speculativeGenerations = new Map<string, SpeculativeGeneration>();
 
   constructor(
     config: VoiceCallConfig,
@@ -52,22 +65,21 @@ export class VoiceCallWebhookServer {
   }
 
   /**
-   * Initialize media streaming with OpenAI Realtime STT.
+   * Initialize media streaming with the configured STT provider.
    */
   private initializeMediaStreaming(): void {
-    const apiKey = this.config.streaming?.openaiApiKey || process.env.OPENAI_API_KEY;
-
-    if (!apiKey) {
-      console.warn("[voice-call] Streaming enabled but no OpenAI API key found");
+    if (!this.config.streaming) {
+      console.warn("[voice-call] Streaming config missing");
       return;
     }
 
-    const sttProvider = new OpenAIRealtimeSTTProvider({
-      apiKey,
-      model: this.config.streaming?.sttModel,
-      silenceDurationMs: this.config.streaming?.silenceDurationMs,
-      vadThreshold: this.config.streaming?.vadThreshold,
-    });
+    let sttProvider;
+    try {
+      sttProvider = createSTTProvider(this.config.streaming);
+    } catch (err) {
+      console.warn(`[voice-call] Failed to create STT provider:`, err);
+      return;
+    }
 
     const streamConfig: MediaStreamConfig = {
       sttProvider,
@@ -87,11 +99,6 @@ export class VoiceCallWebhookServer {
       },
       onTranscript: (providerCallId, transcript) => {
         console.log(`[voice-call] Transcript for ${providerCallId}: ${transcript}`);
-
-        // Clear TTS queue on barge-in (user started speaking, interrupt current playback)
-        if (this.provider.name === "twilio") {
-          (this.provider as TwilioProvider).clearTtsQueue(providerCallId);
-        }
 
         // Look up our internal call ID from the provider call ID
         const call = this.manager.getCallByProviderCallId(providerCallId);
@@ -116,7 +123,7 @@ export class VoiceCallWebhookServer {
         const callMode = call.metadata?.mode as string | undefined;
         const shouldRespond = call.direction === "inbound" || callMode === "conversation";
         if (shouldRespond) {
-          this.handleInboundResponse(call.callId, transcript).catch((err) => {
+          this.handleEndOfTurnResponse(call.callId, transcript).catch((err) => {
             console.warn(`[voice-call] Failed to auto-respond:`, err);
           });
         }
@@ -146,14 +153,127 @@ export class VoiceCallWebhookServer {
       },
       onDisconnect: (callId) => {
         console.log(`[voice-call] Media stream disconnected: ${callId}`);
+        // Clean up any speculative generation for this call
+        this.cancelSpeculativeGeneration(callId);
         if (this.provider.name === "twilio") {
           (this.provider as TwilioProvider).unregisterCallStream(callId);
         }
       },
+      // EagerEndOfTurn: Start speculative LLM call when Flux predicts user is done
+      onEagerEndOfTurn: (providerCallId, transcript) => {
+        const call = this.manager.getCallByProviderCallId(providerCallId);
+        if (!call) {
+          return;
+        }
+
+        const callMode = call.metadata?.mode as string | undefined;
+        const shouldRespond = call.direction === "inbound" || callMode === "conversation";
+        if (!shouldRespond) {
+          return;
+        }
+
+        console.log(`[voice-call] EagerEndOfTurn for ${call.callId}: "${transcript}"`);
+        this.startSpeculativeGeneration(call.callId, transcript);
+      },
+      // TurnResumed: Cancel speculative LLM call when user continues speaking
+      onTurnResumed: (providerCallId, _newTranscript) => {
+        const call = this.manager.getCallByProviderCallId(providerCallId);
+        if (!call) {
+          return;
+        }
+
+        console.log(`[voice-call] TurnResumed for ${call.callId}, cancelling speculative`);
+        this.cancelSpeculativeGeneration(call.callId);
+      },
     };
 
     this.mediaStreamHandler = new MediaStreamHandler(streamConfig);
-    console.log("[voice-call] Media streaming initialized");
+    console.log(`[voice-call] Media streaming initialized with ${sttProvider.name}`);
+  }
+
+  /**
+   * Start a speculative LLM generation on EagerEndOfTurn.
+   * If the transcript matches at EndOfTurn, we can use the result immediately.
+   */
+  private startSpeculativeGeneration(callId: string, transcript: string): void {
+    // Cancel any existing speculative work for this call
+    this.cancelSpeculativeGeneration(callId);
+
+    const call = this.manager.getCall(callId);
+    if (!call || !this.coreConfig) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    // Start the LLM generation in the background
+    const promise = (async (): Promise<VoiceResponseResult> => {
+      const { generateVoiceResponse } = await import("./response-generator.js");
+      return generateVoiceResponse({
+        voiceConfig: this.config,
+        coreConfig: this.coreConfig!,
+        callId,
+        from: call.from,
+        transcript: call.transcript,
+        userMessage: transcript,
+        abortSignal: controller.signal,
+      });
+    })();
+
+    this.speculativeGenerations.set(callId, {
+      controller,
+      transcript,
+      promise,
+    });
+
+    console.log(`[voice-call] Started speculative generation for ${callId}`);
+  }
+
+  /**
+   * Cancel any in-flight speculative LLM generation for a call.
+   */
+  private cancelSpeculativeGeneration(callId: string): void {
+    const speculative = this.speculativeGenerations.get(callId);
+    if (speculative) {
+      speculative.controller.abort();
+      this.speculativeGenerations.delete(callId);
+      console.log(`[voice-call] Cancelled speculative generation for ${callId}`);
+    }
+  }
+
+  /**
+   * Handle EndOfTurn response - use speculative result if available and matching.
+   */
+  private async handleEndOfTurnResponse(callId: string, transcript: string): Promise<void> {
+    const speculative = this.speculativeGenerations.get(callId);
+
+    if (speculative && speculative.transcript === transcript) {
+      // Transcript matches! Use the speculative result
+      console.log(`[voice-call] Using speculative result for ${callId} (transcript matched)`);
+      this.speculativeGenerations.delete(callId);
+
+      try {
+        const result = await speculative.promise;
+        if (result.text) {
+          console.log(`[voice-call] Speculative AI response: "${result.text}"`);
+          await this.manager.speak(callId, result.text);
+        } else if (result.error) {
+          console.error(`[voice-call] Speculative response error: ${result.error}`);
+          // Fall through to fresh generation
+          await this.handleInboundResponse(callId, transcript);
+        }
+      } catch (err) {
+        console.error(`[voice-call] Speculative response failed:`, err);
+        await this.handleInboundResponse(callId, transcript);
+      }
+    } else {
+      // No speculative result or transcript changed - generate fresh
+      if (speculative) {
+        console.log(`[voice-call] Speculative transcript mismatch for ${callId}, generating fresh`);
+        this.cancelSpeculativeGeneration(callId);
+      }
+      await this.handleInboundResponse(callId, transcript);
+    }
   }
 
   /**
@@ -317,8 +437,16 @@ export class VoiceCallWebhookServer {
   }
 
   /**
+   * Check if a call has ended (is in a terminal state).
+   */
+  private isCallEnded(callId: string): boolean {
+    const call = this.manager.getCall(callId);
+    return !call || TerminalStates.has(call.state);
+  }
+
+  /**
    * Handle auto-response for inbound calls using the agent system.
-   * Supports tool calling for richer voice interactions.
+   * Uses streaming to speak sentences as they complete from the LLM.
    */
   private async handleInboundResponse(callId: string, userMessage: string): Promise<void> {
     console.log(`[voice-call] Auto-responding to inbound call ${callId}: "${userMessage}"`);
@@ -336,25 +464,35 @@ export class VoiceCallWebhookServer {
     }
 
     try {
-      const { generateVoiceResponse } = await import("./response-generator.js");
+      const { generateVoiceResponseStreaming } = await import("./response-generator.js");
 
-      const result = await generateVoiceResponse({
+      // Stream sentences to TTS as they complete
+      let sentenceCount = 0;
+      for await (const sentence of generateVoiceResponseStreaming({
         voiceConfig: this.config,
         coreConfig: this.coreConfig,
         callId,
         from: call.from,
         transcript: call.transcript,
         userMessage,
-      });
+      })) {
+        // Check if call ended (user hung up or barge-in)
+        if (this.isCallEnded(callId)) {
+          console.log(`[voice-call] Call ${callId} ended, stopping streaming response`);
+          break;
+        }
 
-      if (result.error) {
-        console.error(`[voice-call] Response generation error: ${result.error}`);
-        return;
+        sentenceCount++;
+        console.log(`[voice-call] Streaming sentence ${sentenceCount}: "${sentence}"`);
+        await this.manager.speak(callId, sentence);
       }
 
-      if (result.text) {
-        console.log(`[voice-call] AI response: "${result.text}"`);
-        await this.manager.speak(callId, result.text);
+      if (sentenceCount === 0) {
+        console.log(`[voice-call] No sentences generated for call ${callId}`);
+      } else {
+        console.log(
+          `[voice-call] Finished streaming ${sentenceCount} sentences for call ${callId}`,
+        );
       }
     } catch (err) {
       console.error(`[voice-call] Auto-response error:`, err);

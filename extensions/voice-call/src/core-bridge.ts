@@ -42,6 +42,9 @@ type CoreAgentDeps = {
     lane?: string;
     extraSystemPrompt?: string;
     agentDir?: string;
+    abortSignal?: AbortSignal;
+    /** Callback for streaming block-level chunks from the LLM. */
+    onBlockReply?: (payload: { text?: string }) => void | Promise<void>;
   }) => Promise<{
     payloads?: Array<{ text?: string; isError?: boolean }>;
     meta?: { aborted?: boolean };

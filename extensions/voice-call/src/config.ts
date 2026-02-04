@@ -77,7 +77,7 @@ export const SttConfigSchema = z
   .default({ provider: "openai", model: "whisper-1" });
 export type SttConfig = z.infer<typeof SttConfigSchema>;
 
-export const TtsProviderSchema = z.enum(["openai", "elevenlabs", "edge"]);
+export const TtsProviderSchema = z.enum(["openai", "elevenlabs", "edge", "cartesia"]);
 export const TtsModeSchema = z.enum(["final", "all"]);
 export const TtsAutoSchema = z.enum(["off", "always", "inbound", "tagged"]);
 
@@ -143,6 +143,14 @@ export const TtsConfigSchema = z
         saveSubtitles: z.boolean().optional(),
         proxy: z.string().optional(),
         timeoutMs: z.number().int().min(1000).max(120000).optional(),
+      })
+      .strict()
+      .optional(),
+    cartesia: z
+      .object({
+        apiKey: z.string().optional(),
+        modelId: z.string().default("sonic-3"),
+        voiceId: z.string().optional(),
       })
       .strict()
       .optional(),
@@ -253,15 +261,25 @@ export const VoiceCallStreamingConfigSchema = z
     /** Enable real-time audio streaming (requires WebSocket support) */
     enabled: z.boolean().default(false),
     /** STT provider for real-time transcription */
-    sttProvider: z.enum(["openai-realtime"]).default("openai-realtime"),
+    sttProvider: z.enum(["openai-realtime", "deepgram-flux"]).default("openai-realtime"),
     /** OpenAI API key for Realtime API (uses OPENAI_API_KEY env if not set) */
     openaiApiKey: z.string().min(1).optional(),
+    /** Deepgram API key for Flux STT (uses DEEPGRAM_API_KEY env if not set) */
+    deepgramApiKey: z.string().min(1).optional(),
     /** OpenAI transcription model (default: gpt-4o-transcribe) */
     sttModel: z.string().min(1).default("gpt-4o-transcribe"),
-    /** VAD silence duration in ms before considering speech ended */
+    /** Deepgram Flux model (default: flux-general-en) */
+    deepgramModel: z.string().min(1).default("flux-general-en"),
+    /** VAD silence duration in ms before considering speech ended (OpenAI) */
     silenceDurationMs: z.number().int().positive().default(800),
-    /** VAD threshold 0-1 (higher = less sensitive) */
+    /** VAD threshold 0-1 (higher = less sensitive, OpenAI) */
     vadThreshold: z.number().min(0).max(1).default(0.5),
+    /** End-of-turn confidence threshold 0.5-0.9 (Deepgram Flux, default: 0.7) */
+    eotThreshold: z.number().min(0.5).max(0.9).default(0.7),
+    /** Eager end-of-turn threshold 0.3-0.9 for early detection (Deepgram Flux, default: 0.4) */
+    eagerEotThreshold: z.number().min(0.3).max(0.9).default(0.4),
+    /** End-of-turn timeout in ms 500-10000 (Deepgram Flux, default: 6000) */
+    eotTimeoutMs: z.number().int().min(500).max(10000).default(6000),
     /** WebSocket path for media stream connections */
     streamPath: z.string().min(1).default("/voice/stream"),
   })
@@ -270,8 +288,13 @@ export const VoiceCallStreamingConfigSchema = z
     enabled: false,
     sttProvider: "openai-realtime",
     sttModel: "gpt-4o-transcribe",
+    deepgramModel: "flux-general-en",
     silenceDurationMs: 800,
     vadThreshold: 0.5,
+    // Deepgram Flux recommended values for low-latency voice agents
+    eotThreshold: 0.7,
+    eagerEotThreshold: 0.4,
+    eotTimeoutMs: 6000,
     streamPath: "/voice/stream",
   });
 export type VoiceCallStreamingConfig = z.infer<typeof VoiceCallStreamingConfigSchema>;
@@ -413,6 +436,24 @@ export function resolveVoiceCallConfig(config: VoiceCallConfig): VoiceCallConfig
   resolved.tunnel.ngrokAuthToken = resolved.tunnel.ngrokAuthToken ?? process.env.NGROK_AUTHTOKEN;
   resolved.tunnel.ngrokDomain = resolved.tunnel.ngrokDomain ?? process.env.NGROK_DOMAIN;
 
+  // Streaming Config (STT providers)
+  resolved.streaming = resolved.streaming ?? {
+    enabled: false,
+    sttProvider: "openai-realtime",
+    sttModel: "gpt-4o-transcribe",
+    deepgramModel: "flux-general-en",
+    silenceDurationMs: 800,
+    vadThreshold: 0.5,
+    // Deepgram Flux recommended values for low-latency voice agents
+    eotThreshold: 0.7,
+    eagerEotThreshold: 0.4,
+    eotTimeoutMs: 6000,
+    streamPath: "/voice/stream",
+  };
+  resolved.streaming.openaiApiKey = resolved.streaming.openaiApiKey ?? process.env.OPENAI_API_KEY;
+  resolved.streaming.deepgramApiKey =
+    resolved.streaming.deepgramApiKey ?? process.env.DEEPGRAM_API_KEY;
+
   return resolved;
 }
 
@@ -480,6 +521,20 @@ export function validateProviderConfig(config: VoiceCallConfig): {
     if (!config.plivo?.authToken) {
       errors.push(
         "plugins.entries.voice-call.config.plivo.authToken is required (or set PLIVO_AUTH_TOKEN env)",
+      );
+    }
+  }
+
+  // Streaming STT provider validation
+  if (config.streaming?.enabled) {
+    if (config.streaming.sttProvider === "openai-realtime" && !config.streaming.openaiApiKey) {
+      errors.push(
+        "plugins.entries.voice-call.config.streaming.openaiApiKey is required (or set OPENAI_API_KEY env)",
+      );
+    }
+    if (config.streaming.sttProvider === "deepgram-flux" && !config.streaming.deepgramApiKey) {
+      errors.push(
+        "plugins.entries.voice-call.config.streaming.deepgramApiKey is required (or set DEEPGRAM_API_KEY env)",
       );
     }
   }

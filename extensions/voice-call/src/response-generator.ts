@@ -20,12 +20,70 @@ export type VoiceResponseParams = {
   transcript: Array<{ speaker: "user" | "bot"; text: string }>;
   /** Latest user message */
   userMessage: string;
+  /** Optional abort signal for cancelling speculative generations */
+  abortSignal?: AbortSignal;
 };
 
 export type VoiceResponseResult = {
   text: string | null;
   error?: string;
 };
+
+/**
+ * Extract complete sentences from a text buffer.
+ * Returns extracted sentences and the remaining incomplete text.
+ *
+ * Sentence boundaries: . ! ? followed by whitespace and capital letter.
+ * Avoids splitting on common abbreviations (Mr., Dr., etc.).
+ */
+function extractSentences(text: string): { sentences: string[]; remaining: string } {
+  const sentences: string[] = [];
+
+  // Common abbreviations to avoid splitting on
+  const abbreviations = /(?:Mr|Mrs|Ms|Dr|Prof|Jr|Sr|Inc|Ltd|Corp|vs|etc|e\.g|i\.e)\./gi;
+
+  // Replace abbreviations with placeholders
+  const placeholders = new Map<string, string>();
+  let placeholderIndex = 0;
+  const textWithPlaceholders = text.replace(abbreviations, (match) => {
+    const placeholder = `__ABBR${placeholderIndex++}__`;
+    placeholders.set(placeholder, match);
+    return placeholder;
+  });
+
+  // Match sentence endings: . ! ? followed by space and capital letter (or end of string for final)
+  // Use positive lookahead to not consume the capital letter
+  const pattern = /[.!?]\s+(?=[A-Z])/g;
+
+  let lastEnd = 0;
+  let match: RegExpExecArray | null;
+
+  // biome-ignore lint/suspicious/noAssignInExpressions: cleaner exec loop
+  while ((match = pattern.exec(textWithPlaceholders)) !== null) {
+    const sentenceEnd = match.index + match[0].length;
+    let sentence = textWithPlaceholders.slice(lastEnd, sentenceEnd).trim();
+
+    // Restore abbreviations in this sentence
+    for (const [placeholder, original] of placeholders) {
+      sentence = sentence.replace(placeholder, original);
+    }
+
+    if (sentence) {
+      sentences.push(sentence);
+    }
+    lastEnd = sentenceEnd;
+  }
+
+  // Get remaining text (incomplete sentence)
+  let remaining = textWithPlaceholders.slice(lastEnd);
+
+  // Restore abbreviations in remaining text
+  for (const [placeholder, original] of placeholders) {
+    remaining = remaining.replace(placeholder, original);
+  }
+
+  return { sentences, remaining };
+}
 
 type SessionEntry = {
   sessionId: string;
@@ -39,7 +97,7 @@ type SessionEntry = {
 export async function generateVoiceResponse(
   params: VoiceResponseParams,
 ): Promise<VoiceResponseResult> {
-  const { voiceConfig, callId, from, transcript, userMessage, coreConfig } = params;
+  const { voiceConfig, callId, from, transcript, userMessage, coreConfig, abortSignal } = params;
 
   if (!coreConfig) {
     return { text: null, error: "Core config unavailable for voice response" };
@@ -136,6 +194,7 @@ export async function generateVoiceResponse(
       lane: "voice",
       extraSystemPrompt,
       agentDir,
+      abortSignal,
     });
 
     // Extract text from payloads
@@ -146,7 +205,7 @@ export async function generateVoiceResponse(
 
     const text = texts.join(" ") || null;
 
-    if (!text && result.meta.aborted) {
+    if (!text && result.meta?.aborted) {
       return { text: null, error: "Response generation was aborted" };
     }
 
@@ -154,5 +213,173 @@ export async function generateVoiceResponse(
   } catch (err) {
     console.error(`[voice-call] Response generation failed:`, err);
     return { text: null, error: String(err) };
+  }
+}
+
+/**
+ * Streaming variant that yields sentences as they complete from the LLM.
+ * Uses onBlockReply callback to accumulate text and detect sentence boundaries.
+ * Start speaking the first sentence while the LLM is still generating.
+ */
+export async function* generateVoiceResponseStreaming(
+  params: VoiceResponseParams,
+): AsyncGenerator<string, void, unknown> {
+  const { voiceConfig, callId, from, transcript, userMessage, coreConfig, abortSignal } = params;
+
+  if (!coreConfig) {
+    console.error("[voice-call] Core config unavailable for streaming voice response");
+    return;
+  }
+
+  let deps: Awaited<ReturnType<typeof loadCoreAgentDeps>>;
+  try {
+    deps = await loadCoreAgentDeps();
+  } catch (err) {
+    console.error(
+      "[voice-call] Unable to load core deps:",
+      err instanceof Error ? err.message : err,
+    );
+    return;
+  }
+  const cfg = coreConfig;
+
+  // Build voice-specific session key based on phone number
+  const normalizedPhone = from.replace(/\D/g, "");
+  const sessionKey = `voice:${normalizedPhone}`;
+  const agentId = "main";
+
+  // Resolve paths
+  const storePath = deps.resolveStorePath(cfg.session?.store, { agentId });
+  const agentDir = deps.resolveAgentDir(cfg, agentId);
+  const workspaceDir = deps.resolveAgentWorkspaceDir(cfg, agentId);
+
+  // Ensure workspace exists
+  await deps.ensureAgentWorkspace({ dir: workspaceDir });
+
+  // Load or create session entry
+  const sessionStore = deps.loadSessionStore(storePath);
+  const now = Date.now();
+  let sessionEntry = sessionStore[sessionKey] as SessionEntry | undefined;
+
+  if (!sessionEntry) {
+    sessionEntry = {
+      sessionId: crypto.randomUUID(),
+      updatedAt: now,
+    };
+    sessionStore[sessionKey] = sessionEntry;
+    await deps.saveSessionStore(storePath, sessionStore);
+  }
+
+  const sessionId = sessionEntry.sessionId;
+  const sessionFile = deps.resolveSessionFilePath(sessionId, sessionEntry, {
+    agentId,
+  });
+
+  // Resolve model from config
+  const modelRef = voiceConfig.responseModel || `${deps.DEFAULT_PROVIDER}/${deps.DEFAULT_MODEL}`;
+  const slashIndex = modelRef.indexOf("/");
+  const provider = slashIndex === -1 ? deps.DEFAULT_PROVIDER : modelRef.slice(0, slashIndex);
+  const model = slashIndex === -1 ? modelRef : modelRef.slice(slashIndex + 1);
+
+  // Resolve thinking level
+  const thinkLevel = deps.resolveThinkingDefault({ cfg, provider, model });
+
+  // Resolve agent identity for personalized prompt
+  const identity = deps.resolveAgentIdentity(cfg, agentId);
+  const agentName = identity?.name?.trim() || "assistant";
+
+  // Build system prompt with conversation history
+  const basePrompt =
+    voiceConfig.responseSystemPrompt ??
+    `You are ${agentName}, a helpful voice assistant on a phone call. Keep responses brief and conversational (1-2 sentences max). Be natural and friendly. The caller's phone number is ${from}. You have access to tools - use them when helpful.`;
+
+  let extraSystemPrompt = basePrompt;
+  if (transcript.length > 0) {
+    const history = transcript
+      .map((entry) => `${entry.speaker === "bot" ? "You" : "Caller"}: ${entry.text}`)
+      .join("\n");
+    extraSystemPrompt = `${basePrompt}\n\nConversation so far:\n${history}`;
+  }
+
+  // Resolve timeout
+  const timeoutMs = voiceConfig.responseTimeoutMs ?? deps.resolveAgentTimeoutMs({ cfg });
+  const runId = `voice:${callId}:${Date.now()}`;
+
+  // Streaming state
+  const sentenceQueue: string[] = [];
+  let textBuffer = "";
+  let done = false;
+  let error: Error | null = null;
+  let resolveWait: (() => void) | null = null;
+
+  // Start LLM generation in background
+  const llmPromise = deps
+    .runEmbeddedPiAgent({
+      sessionId,
+      sessionKey,
+      messageProvider: "voice",
+      sessionFile,
+      workspaceDir,
+      config: cfg,
+      prompt: userMessage,
+      provider,
+      model,
+      thinkLevel,
+      verboseLevel: "off",
+      timeoutMs,
+      runId,
+      lane: "voice",
+      extraSystemPrompt,
+      agentDir,
+      abortSignal,
+      onBlockReply: (payload) => {
+        if (payload.text) {
+          textBuffer += payload.text;
+          // Extract complete sentences
+          const { sentences, remaining } = extractSentences(textBuffer);
+          textBuffer = remaining;
+          for (const sentence of sentences) {
+            sentenceQueue.push(sentence);
+          }
+          // Wake up the generator if waiting
+          resolveWait?.();
+        }
+      },
+    })
+    .then(() => {
+      done = true;
+      resolveWait?.();
+    })
+    .catch((e) => {
+      error = e instanceof Error ? e : new Error(String(e));
+      resolveWait?.();
+    });
+
+  // Yield sentences as they arrive
+  while (!done || sentenceQueue.length > 0) {
+    if (sentenceQueue.length > 0) {
+      yield sentenceQueue.shift()!;
+    } else if (!done && !error) {
+      // Wait for more sentences or completion
+      await new Promise<void>((r) => {
+        resolveWait = r;
+      });
+      resolveWait = null;
+    } else {
+      break;
+    }
+  }
+
+  // Yield remaining buffer as final sentence (if any)
+  if (textBuffer.trim()) {
+    yield textBuffer.trim();
+  }
+
+  // Wait for LLM to fully complete (cleanup)
+  await llmPromise.catch(() => {});
+
+  if (error) {
+    console.error("[voice-call] Streaming response generation failed:", error);
+    throw error;
   }
 }

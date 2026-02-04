@@ -3,24 +3,35 @@
  *
  * Handles bidirectional audio streaming between Twilio and the AI services.
  * - Receives mu-law audio from Twilio via WebSocket
- * - Forwards to OpenAI Realtime STT for transcription
+ * - Forwards to STT provider (OpenAI Realtime or Deepgram Flux) for transcription
  * - Sends TTS audio back to Twilio
  */
 
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import type {
-  OpenAIRealtimeSTTProvider,
-  RealtimeSTTSession,
-} from "./providers/stt-openai-realtime.js";
+import type { DeepgramFluxSTTSession } from "./providers/stt-deepgram-flux.js";
+import type { RealtimeSTTSession } from "./providers/stt-openai-realtime.js";
+
+/**
+ * Unified STT session interface that both providers implement.
+ */
+export type STTSession = RealtimeSTTSession | DeepgramFluxSTTSession;
+
+/**
+ * STT provider interface for creating sessions.
+ */
+export interface STTProvider {
+  readonly name: string;
+  createSession(): STTSession;
+}
 
 /**
  * Configuration for the media stream handler.
  */
 export interface MediaStreamConfig {
   /** STT provider for transcription */
-  sttProvider: OpenAIRealtimeSTTProvider;
+  sttProvider: STTProvider;
   /** Validate whether to accept a media stream for the given call ID */
   shouldAcceptStream?: (params: { callId: string; streamSid: string; token?: string }) => boolean;
   /** Callback when transcript is received */
@@ -33,6 +44,10 @@ export interface MediaStreamConfig {
   onSpeechStart?: (callId: string) => void;
   /** Callback when stream disconnects */
   onDisconnect?: (callId: string) => void;
+  /** Callback for eager end-of-turn (speculative LLM processing) */
+  onEagerEndOfTurn?: (callId: string, transcript: string) => void;
+  /** Callback when turn resumes after eager end-of-turn (cancel speculative work) */
+  onTurnResumed?: (callId: string, newTranscript: string) => void;
 }
 
 /**
@@ -42,7 +57,7 @@ interface StreamSession {
   callId: string;
   streamSid: string;
   ws: WebSocket;
-  sttSession: RealtimeSTTSession;
+  sttSession: STTSession;
 }
 
 type TtsQueueEntry = {
@@ -174,8 +189,24 @@ export class MediaStreamHandler {
     });
 
     sttSession.onSpeechStart(() => {
+      // Barge-in: clear TTS queue and stop playback when user starts speaking
+      this.clearTtsQueue(streamSid);
       this.config.onSpeechStart?.(callSid);
     });
+
+    // Wire up Flux-specific callbacks if supported (Deepgram Flux only)
+    if ("onEagerEndOfTurn" in sttSession && typeof sttSession.onEagerEndOfTurn === "function") {
+      sttSession.onEagerEndOfTurn((transcript: string) => {
+        this.config.onEagerEndOfTurn?.(callSid, transcript);
+      });
+    }
+    if ("onTurnResumed" in sttSession && typeof sttSession.onTurnResumed === "function") {
+      sttSession.onTurnResumed((transcript: string) => {
+        // Cancel TTS queue in case response already started playing
+        this.clearTtsQueue(streamSid);
+        this.config.onTurnResumed?.(callSid, transcript);
+      });
+    }
 
     const session: StreamSession = {
       callId: callSid,
@@ -189,7 +220,7 @@ export class MediaStreamHandler {
     // Notify connection BEFORE STT connect so TTS can work even if STT fails
     this.config.onConnect?.(callSid, streamSid);
 
-    // Connect to OpenAI STT (non-blocking, log errors but don't fail the call)
+    // Connect to STT provider (non-blocking, log errors but don't fail the call)
     sttSession.connect().catch((err) => {
       console.warn(`[MediaStream] STT connection failed (TTS still works):`, err.message);
     });
@@ -408,4 +439,43 @@ interface TwilioMediaMessage {
   mark?: {
     name: string;
   };
+}
+
+// -----------------------------------------------------------------------------
+// STT Provider Factory
+// -----------------------------------------------------------------------------
+
+import type { VoiceCallStreamingConfig } from "./config.js";
+import { DeepgramFluxSTTProvider } from "./providers/stt-deepgram-flux.js";
+import { OpenAIRealtimeSTTProvider } from "./providers/stt-openai-realtime.js";
+
+/**
+ * Create an STT provider based on configuration.
+ */
+export function createSTTProvider(config: VoiceCallStreamingConfig): STTProvider {
+  switch (config.sttProvider) {
+    case "deepgram-flux":
+      if (!config.deepgramApiKey) {
+        throw new Error("Deepgram API key required for Flux STT provider");
+      }
+      return new DeepgramFluxSTTProvider({
+        apiKey: config.deepgramApiKey,
+        model: config.deepgramModel,
+        eotThreshold: config.eotThreshold,
+        eagerEotThreshold: config.eagerEotThreshold,
+        eotTimeoutMs: config.eotTimeoutMs,
+      });
+
+    case "openai-realtime":
+    default:
+      if (!config.openaiApiKey) {
+        throw new Error("OpenAI API key required for Realtime STT provider");
+      }
+      return new OpenAIRealtimeSTTProvider({
+        apiKey: config.openaiApiKey,
+        model: config.sttModel,
+        silenceDurationMs: config.silenceDurationMs,
+        vadThreshold: config.vadThreshold,
+      });
+  }
 }

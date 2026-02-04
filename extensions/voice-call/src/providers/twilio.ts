@@ -546,31 +546,45 @@ export class TwilioProvider implements VoiceCallProvider {
    * Play TTS via core TTS and Twilio Media Streams.
    * Generates audio with core TTS, converts to mu-law, and streams via WebSocket.
    * Uses a queue to serialize playback and prevent overlapping audio.
+   *
+   * Supports two modes:
+   * 1. Streaming (Cartesia): Forward chunks immediately as they arrive (~90ms TTFA)
+   * 2. Buffered (OpenAI, ElevenLabs): Wait for full synthesis, then chunk and pace
    */
   private async playTtsViaStream(text: string, streamSid: string): Promise<void> {
     if (!this.ttsProvider || !this.mediaStreamHandler) {
       throw new Error("TTS provider and media stream handler required");
     }
 
-    // Stream audio in 20ms chunks (160 bytes at 8kHz mu-law)
+    // Stream audio in 20ms chunks (160 bytes at 8kHz mu-law) for buffered mode
     const CHUNK_SIZE = 160;
     const CHUNK_DELAY_MS = 20;
 
     const handler = this.mediaStreamHandler;
     const ttsProvider = this.ttsProvider;
     await handler.queueTts(streamSid, async (signal) => {
-      // Generate audio with core TTS (returns mu-law at 8kHz)
-      const muLawAudio = await ttsProvider.synthesizeForTelephony(text);
-      for (const chunk of chunkAudio(muLawAudio, CHUNK_SIZE)) {
-        if (signal.aborted) {
-          break;
+      // Prefer streaming if available (Cartesia) - chunks forwarded immediately
+      if (ttsProvider.synthesizeForTelephonyStreaming) {
+        for await (const chunk of ttsProvider.synthesizeForTelephonyStreaming(text)) {
+          if (signal.aborted) {
+            break;
+          }
+          handler.sendAudio(streamSid, chunk);
+          // No artificial delay - chunks are naturally paced by Cartesia
         }
-        handler.sendAudio(streamSid, chunk);
-
-        // Pace the audio to match real-time playback
-        await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
-        if (signal.aborted) {
-          break;
+      } else {
+        // Fallback to buffered mode (OpenAI, ElevenLabs)
+        const muLawAudio = await ttsProvider.synthesizeForTelephony(text);
+        for (const chunk of chunkAudio(muLawAudio, CHUNK_SIZE)) {
+          if (signal.aborted) {
+            break;
+          }
+          handler.sendAudio(streamSid, chunk);
+          // Pace the audio to match real-time playback
+          await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
+          if (signal.aborted) {
+            break;
+          }
         }
       }
 

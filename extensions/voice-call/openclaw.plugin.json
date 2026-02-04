@@ -86,13 +86,42 @@
       "label": "Enable Streaming",
       "advanced": true
     },
+    "streaming.sttProvider": {
+      "label": "STT Provider",
+      "help": "openai-realtime or deepgram-flux",
+      "advanced": true
+    },
     "streaming.openaiApiKey": {
       "label": "OpenAI Realtime API Key",
       "sensitive": true,
       "advanced": true
     },
+    "streaming.deepgramApiKey": {
+      "label": "Deepgram API Key",
+      "sensitive": true,
+      "advanced": true
+    },
     "streaming.sttModel": {
-      "label": "Realtime STT Model",
+      "label": "OpenAI STT Model",
+      "advanced": true
+    },
+    "streaming.deepgramModel": {
+      "label": "Deepgram Flux Model",
+      "advanced": true
+    },
+    "streaming.eotThreshold": {
+      "label": "Deepgram EOT Threshold",
+      "help": "End-of-turn confidence (0.5-0.9)",
+      "advanced": true
+    },
+    "streaming.eagerEotThreshold": {
+      "label": "Deepgram Eager EOT Threshold",
+      "help": "Early turn detection (0.3-0.9)",
+      "advanced": true
+    },
+    "streaming.eotTimeoutMs": {
+      "label": "Deepgram EOT Timeout (ms)",
+      "help": "Max wait before forcing end-of-turn (500-10000)",
       "advanced": true
     },
     "streaming.streamPath": {
@@ -132,6 +161,19 @@
     },
     "tts.elevenlabs.baseUrl": {
       "label": "ElevenLabs Base URL",
+      "advanced": true
+    },
+    "tts.cartesia.apiKey": {
+      "label": "Cartesia API Key",
+      "sensitive": true,
+      "advanced": true
+    },
+    "tts.cartesia.modelId": {
+      "label": "Cartesia Model",
+      "advanced": true
+    },
+    "tts.cartesia.voiceId": {
+      "label": "Cartesia Voice ID",
       "advanced": true
     },
     "publicUrl": {
@@ -322,12 +364,18 @@
           },
           "sttProvider": {
             "type": "string",
-            "enum": ["openai-realtime"]
+            "enum": ["openai-realtime", "deepgram-flux"]
           },
           "openaiApiKey": {
             "type": "string"
           },
+          "deepgramApiKey": {
+            "type": "string"
+          },
           "sttModel": {
+            "type": "string"
+          },
+          "deepgramModel": {
             "type": "string"
           },
           "silenceDurationMs": {
@@ -338,6 +386,21 @@
             "type": "number",
             "minimum": 0,
             "maximum": 1
+          },
+          "eotThreshold": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 0.9
+          },
+          "eagerEotThreshold": {
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 0.9
+          },
+          "eotTimeoutMs": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 10000
           },
           "streamPath": {
             "type": "string"
@@ -380,7 +443,7 @@
           },
           "provider": {
             "type": "string",
-            "enum": ["openai", "elevenlabs", "edge"]
+            "enum": ["openai", "elevenlabs", "edge", "cartesia"]
           },
           "summaryModel": {
             "type": "string"
@@ -524,6 +587,21 @@
                 "type": "integer",
                 "minimum": 1000,
                 "maximum": 120000
+              }
+            }
+          },
+          "cartesia": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "apiKey": {
+                "type": "string"
+              },
+              "modelId": {
+                "type": "string"
+              },
+              "voiceId": {
+                "type": "string"
               }
             }
           },

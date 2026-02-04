@@ -1,5 +1,6 @@
 import type { VoiceCallTtsConfig } from "./config.js";
 import type { CoreConfig } from "./core-bridge.js";
+import { createCartesiaTtsProvider } from "./providers/tts-cartesia.js";
 import { convertPcmToMulaw8k } from "./telephony-audio.js";
 
 export type TelephonyTtsRuntime = {
@@ -18,6 +19,8 @@ export type TelephonyTtsRuntime = {
 
 export type TelephonyTtsProvider = {
   synthesizeForTelephony: (text: string) => Promise<Buffer>;
+  /** Streaming variant - yields chunks as they arrive for immediate forwarding */
+  synthesizeForTelephonyStreaming?: (text: string) => AsyncGenerator<Buffer>;
 };
 
 export function createTelephonyTtsProvider(params: {
@@ -26,6 +29,23 @@ export function createTelephonyTtsProvider(params: {
   runtime: TelephonyTtsRuntime;
 }): TelephonyTtsProvider {
   const { coreConfig, ttsOverride, runtime } = params;
+
+  // Cartesia outputs mu-law 8kHz directly - no conversion needed
+  // Also supports streaming for immediate chunk forwarding (~90ms TTFA)
+  if (ttsOverride?.provider === "cartesia") {
+    const cartesiaProvider = createCartesiaTtsProvider({
+      apiKey: ttsOverride.cartesia?.apiKey,
+      modelId: ttsOverride.cartesia?.modelId,
+      voiceId: ttsOverride.cartesia?.voiceId,
+    });
+    return {
+      synthesizeForTelephony: (text: string) => cartesiaProvider.synthesizeForTelephony(text),
+      synthesizeForTelephonyStreaming: (text: string) =>
+        cartesiaProvider.synthesizeForTelephonyStreaming(text),
+    };
+  }
+
+  // Other providers (OpenAI, ElevenLabs) need PCM-to-mulaw conversion
   const mergedConfig = applyTtsOverride(coreConfig, ttsOverride);
 
   return {
