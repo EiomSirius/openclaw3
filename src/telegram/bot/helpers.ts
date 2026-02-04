@@ -265,6 +265,8 @@ export function describeReplyTarget(msg: TelegramMessage): TelegramReplyTarget |
   };
 }
 
+export type TelegramChatType = "private" | "group" | "supergroup" | "channel";
+
 export type TelegramForwardedContext = {
   from: string;
   date?: number;
@@ -274,7 +276,7 @@ export type TelegramForwardedContext = {
   fromTitle?: string;
   fromSignature?: string;
   /** Original chat type from forward_from_chat (e.g. "channel", "supergroup", "group"). */
-  fromChatType?: string;
+  fromChatType?: TelegramChatType;
   /** Original message ID in the source chat (channel forwards). */
   fromMessageId?: number;
 };
@@ -350,7 +352,7 @@ function buildForwardedContextFromChat(params: {
   }
   const signature = params.signature?.trim() || undefined;
   const from = signature ? `${display} (${signature})` : display;
-  const chatType = params.chat.type?.trim() || undefined;
+  const chatType = (params.chat.type?.trim() || undefined) as TelegramChatType | undefined;
   return {
     from,
     date: params.date,
@@ -383,7 +385,8 @@ function resolveForwardOrigin(
     });
   }
   // Prefer author_signature from forward_origin over legacy forward_signature
-  const effectiveSignature = origin.author_signature?.trim() || legacySignature;
+  const effectiveSignature =
+    origin.author_signature?.trim() || legacySignature?.trim() || undefined;
   if (origin.type === "chat" && origin.sender_chat) {
     return buildForwardedContextFromChat({
       chat: origin.sender_chat,

@@ -219,6 +219,37 @@ describe("normalizeForwardedContext", () => {
     expect(ctx?.fromTitle).toBe("Super Group");
   });
 
+  it("trims legacy forward_signature when used as fallback", () => {
+    const ctx = normalizeForwardedContext({
+      forward_origin: {
+        type: "channel",
+        chat: { title: "Updates", id: -100222, type: "channel" },
+        date: 850,
+      },
+      forward_signature: "  Padded Sig  ",
+      // oxlint-disable-next-line typescript/no-explicit-any
+    } as any);
+    expect(ctx).not.toBeNull();
+    expect(ctx?.fromSignature).toBe("Padded Sig");
+    expect(ctx?.from).toBe("Updates (Padded Sig)");
+  });
+
+  it("returns undefined signature when both author_signature and legacy are blank", () => {
+    const ctx = normalizeForwardedContext({
+      forward_origin: {
+        type: "channel",
+        chat: { title: "Updates", id: -100333, type: "channel" },
+        date: 860,
+        author_signature: "   ",
+      },
+      forward_signature: "   ",
+      // oxlint-disable-next-line typescript/no-explicit-any
+    } as any);
+    expect(ctx).not.toBeNull();
+    expect(ctx?.fromSignature).toBeUndefined();
+    expect(ctx?.from).toBe("Updates");
+  });
+
   it("handles forward_origin channel without author_signature", () => {
     const ctx = normalizeForwardedContext({
       forward_origin: {
