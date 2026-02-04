@@ -1,0 +1,38 @@
+# AMOS Stealer IOCs - ClawHavoc Campaign
+# Unit221B - 2026-02-03
+# Format: type|value|description
+
+# Network IOCs
+ip|91.92.242.30|Primary C2 server (Railnet LLC, NL)
+ip|54.91.154.110|Secondary C2 / reverse shell listener (AWS)
+asn|214943|Railnet LLC - hosting provider
+
+# URLs (payload distribution)
+url|http://91.92.242.30/x5ki60w1ih838sp7|AMOS payload
+url|http://91.92.242.30/dx2w5j5bka6qkwxi|AMOS payload
+url|http://91.92.242.30/6x8c0trkp4l9uugo|AMOS dropper
+url|http://91.92.242.30/zoemtpmgck30oa8n|AMOS payload
+url|http://91.92.242.30/aobqq9ugypkko7o2|AMOS payload
+url|http://91.92.242.30/omezqf3mp0yuhsn9|AMOS payload
+url|http://91.92.242.30/lamq4uerkruo6ssm|Dropper script
+url|http://91.92.242.30/7buu24ly8m1tn8m4|Dropper script
+url|http://91.92.242.30/dyrtvwjfveyxjf23|AMOS payload
+url|http://91.92.242.30/l5ou8r739pc48rwi|AMOS payload
+
+# Domains (historical, from passive DNS)
+domain|vorderingenonline.com|Active C2 domain
+
+# File Hashes (SHA256)
+sha256|1e6d4b0538558429422b71d1f4d724c8ce31be92d299df33a8339e32316e2298|x5ki60w1ih838sp7
+sha256|998c38b430097479b015a68d9435dc5b98684119739572a4dff11e085881187e|dx2w5j5bka6qkwxi
+sha256|a0e66f3067e4aaf5b83e45b7845cc43b2fc96032a4398cab7cc9d11f4f962e91|zoemtpmgck30oa8n
+sha256|77d3ccb2ed3d0dd7cda49a0aed4da7c46278e70995d8e6768b2188fedcb78703|aobqq9ugypkko7o2
+sha256|ab267488d2c0a6300b61b5c9046cb86fe4a9ac3fe9a615acd374465b3a4b26c2|omezqf3mp0yuhsn9
+sha256|e3b5a5dbbccab4cf36c7abf5cb5ae83062dd1b5dee7db04bddbf53fc9ebdb233|6x8c0trkp4l9uugo
+sha256|30f97ae88f8861eeadeb54854d47078724e52e2ef36dd847180663b7f5763168|dyrtvwjfveyxjf23
+sha256|f2cb9de40cb8b7e13e7d2b0b3e426f8503781a35d8bba3715395430e9b5eeb38|l5ou8r739pc48rwi
+sha256|fe3859f076f3b34efc4155b7d724b024d193dd20ad2e4638985ffbe15992f27d|mkg4q533759wb5ax
+sha256|7f46ccf29724254e228cef0ca8fdef705702059381ca980b653b55da1683cb61|n6h8nvzgojrjw3tw
+
+# Code Signing
+codesign|jhzhhfomng|Ad-hoc signing identifier
