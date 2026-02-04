@@ -11,9 +11,18 @@ import {
 } from "../config/sessions/paths.js";
 import { estimateUsageCost, resolveModelCostConfig } from "../utils/usage-format.js";
 
+type CostBreakdown = {
+  total?: number;
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+};
+
 type ParsedUsageEntry = {
   usage: NormalizedUsage;
   costTotal?: number;
+  costBreakdown?: CostBreakdown;
   provider?: string;
   model?: string;
   timestamp?: Date;
@@ -26,6 +35,11 @@ export type CostUsageTotals = {
   cacheWrite: number;
   totalTokens: number;
   totalCost: number;
+  // Cost breakdown by token type (from actual API data when available)
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  cacheWriteCost: number;
   missingCostEntries: number;
 };
 
@@ -40,10 +54,18 @@ export type CostUsageSummary = {
   totals: CostUsageTotals;
 };
 
+export type SessionDailyUsage = {
+  date: string; // YYYY-MM-DD
+  tokens: number;
+  cost: number;
+};
+
 export type SessionCostSummary = CostUsageTotals & {
   sessionId?: string;
   sessionFile?: string;
   lastActivity?: number;
+  activityDates?: string[]; // YYYY-MM-DD dates when session had activity
+  dailyBreakdown?: SessionDailyUsage[]; // Per-day token/cost breakdown
 };
 
 const emptyTotals = (): CostUsageTotals => ({
@@ -53,6 +75,10 @@ const emptyTotals = (): CostUsageTotals => ({
   cacheWrite: 0,
   totalTokens: 0,
   totalCost: 0,
+  inputCost: 0,
+  outputCost: 0,
+  cacheReadCost: 0,
+  cacheWriteCost: 0,
   missingCostEntries: 0,
 });
 
@@ -66,20 +92,32 @@ const toFiniteNumber = (value: unknown): number | undefined => {
   return value;
 };
 
-const extractCostTotal = (usageRaw?: UsageLike | null): number | undefined => {
+const extractCostBreakdown = (usageRaw?: UsageLike | null): CostBreakdown | undefined => {
   if (!usageRaw || typeof usageRaw !== "object") {
     return undefined;
   }
   const record = usageRaw as Record<string, unknown>;
   const cost = record.cost as Record<string, unknown> | undefined;
-  const total = toFiniteNumber(cost?.total);
-  if (total === undefined) {
+  if (!cost) {
     return undefined;
   }
-  if (total < 0) {
+
+  const total = toFiniteNumber(cost.total);
+  if (total === undefined || total < 0) {
     return undefined;
   }
-  return total;
+
+  return {
+    total,
+    input: toFiniteNumber(cost.input),
+    output: toFiniteNumber(cost.output),
+    cacheRead: toFiniteNumber(cost.cacheRead),
+    cacheWrite: toFiniteNumber(cost.cacheWrite),
+  };
+};
+
+const extractCostTotal = (usageRaw?: UsageLike | null): number | undefined => {
+  return extractCostBreakdown(usageRaw)?.total;
 };
 
 const parseTimestamp = (entry: Record<string, unknown>): Date | undefined => {
@@ -122,9 +160,11 @@ const parseUsageEntry = (entry: Record<string, unknown>): ParsedUsageEntry | nul
     (typeof message?.model === "string" ? message?.model : undefined) ??
     (typeof entry.model === "string" ? entry.model : undefined);
 
+  const costBreakdown = extractCostBreakdown(usageRaw);
   return {
     usage,
-    costTotal: extractCostTotal(usageRaw),
+    costTotal: costBreakdown?.total,
+    costBreakdown,
     provider,
     model,
     timestamp: parseTimestamp(entry),
@@ -145,6 +185,19 @@ const applyUsageTotals = (totals: CostUsageTotals, usage: NormalizedUsage) => {
   totals.totalTokens += totalTokens;
 };
 
+const applyCostBreakdown = (totals: CostUsageTotals, costBreakdown: CostBreakdown | undefined) => {
+  if (costBreakdown === undefined || costBreakdown.total === undefined) {
+    totals.missingCostEntries += 1;
+    return;
+  }
+  totals.totalCost += costBreakdown.total;
+  totals.inputCost += costBreakdown.input ?? 0;
+  totals.outputCost += costBreakdown.output ?? 0;
+  totals.cacheReadCost += costBreakdown.cacheRead ?? 0;
+  totals.cacheWriteCost += costBreakdown.cacheWrite ?? 0;
+};
+
+// Legacy function for backwards compatibility
 const applyCostTotal = (totals: CostUsageTotals, costTotal: number | undefined) => {
   if (costTotal === undefined) {
     totals.missingCostEntries += 1;
@@ -190,15 +243,27 @@ async function scanUsageFile(params: {
 }
 
 export async function loadCostUsageSummary(params?: {
-  days?: number;
+  startMs?: number;
+  endMs?: number;
+  days?: number; // Deprecated, for backwards compatibility
   config?: OpenClawConfig;
   agentId?: string;
 }): Promise<CostUsageSummary> {
-  const days = Math.max(1, Math.floor(params?.days ?? 30));
   const now = new Date();
-  const since = new Date(now);
-  since.setDate(since.getDate() - (days - 1));
-  const sinceTime = since.getTime();
+  let sinceTime: number;
+  let untilTime: number;
+
+  if (params?.startMs !== undefined && params?.endMs !== undefined) {
+    sinceTime = params.startMs;
+    untilTime = params.endMs;
+  } else {
+    // Fallback to days-based calculation for backwards compatibility
+    const days = Math.max(1, Math.floor(params?.days ?? 30));
+    const since = new Date(now);
+    since.setDate(since.getDate() - (days - 1));
+    sinceTime = since.getTime();
+    untilTime = now.getTime();
+  }
 
   const dailyMap = new Map<string, CostUsageTotals>();
   const totals = emptyTotals();
@@ -215,6 +280,7 @@ export async function loadCostUsageSummary(params?: {
           if (!stats) {
             return null;
           }
+          // Include file if it was modified after our start time
           if (stats.mtimeMs < sinceTime) {
             return null;
           }
@@ -229,17 +295,17 @@ export async function loadCostUsageSummary(params?: {
       config: params?.config,
       onEntry: (entry) => {
         const ts = entry.timestamp?.getTime();
-        if (!ts || ts < sinceTime) {
+        if (!ts || ts < sinceTime || ts > untilTime) {
           return;
         }
         const dayKey = formatDayKey(entry.timestamp ?? now);
         const bucket = dailyMap.get(dayKey) ?? emptyTotals();
         applyUsageTotals(bucket, entry.usage);
-        applyCostTotal(bucket, entry.costTotal);
+        applyCostBreakdown(bucket, entry.costBreakdown);
         dailyMap.set(dayKey, bucket);
 
         applyUsageTotals(totals, entry.usage);
-        applyCostTotal(totals, entry.costTotal);
+        applyCostBreakdown(totals, entry.costBreakdown);
       },
     });
   }
@@ -247,6 +313,9 @@ export async function loadCostUsageSummary(params?: {
   const daily = Array.from(dailyMap.entries())
     .map(([date, bucket]) => Object.assign({ date }, bucket))
     .toSorted((a, b) => a.date.localeCompare(b.date));
+
+  // Calculate days for backwards compatibility in response
+  const days = Math.ceil((untilTime - sinceTime) / (24 * 60 * 60 * 1000)) + 1;
 
   return {
     updatedAt: Date.now(),
@@ -256,11 +325,113 @@ export async function loadCostUsageSummary(params?: {
   };
 }
 
+export type DiscoveredSession = {
+  sessionId: string;
+  sessionFile: string;
+  mtime: number;
+  firstUserMessage?: string;
+};
+
+/**
+ * Scan all transcript files to discover sessions not in the session store.
+ * Returns basic metadata for each discovered session.
+ */
+export async function discoverAllSessions(params?: {
+  agentId?: string;
+  startMs?: number;
+  endMs?: number;
+}): Promise<DiscoveredSession[]> {
+  const sessionsDir = resolveSessionTranscriptsDirForAgent(params?.agentId);
+  const entries = await fs.promises.readdir(sessionsDir, { withFileTypes: true }).catch(() => []);
+
+  const discovered: DiscoveredSession[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".jsonl")) {
+      continue;
+    }
+
+    const filePath = path.join(sessionsDir, entry.name);
+    const stats = await fs.promises.stat(filePath).catch(() => null);
+    if (!stats) {
+      continue;
+    }
+
+    // Filter by date range if provided
+    if (params?.startMs && stats.mtimeMs < params.startMs) {
+      continue;
+    }
+    if (params?.endMs && stats.mtimeMs > params.endMs) {
+      continue;
+    }
+
+    // Extract session ID from filename (remove .jsonl)
+    const sessionId = entry.name.slice(0, -6);
+
+    // Try to read first user message for label extraction
+    let firstUserMessage: string | undefined;
+    try {
+      const fileStream = fs.createReadStream(filePath, { encoding: "utf-8" });
+      const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+      for await (const line of rl) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+          const message = parsed.message as Record<string, unknown> | undefined;
+          if (message?.role === "user") {
+            const content = message.content;
+            if (typeof content === "string") {
+              firstUserMessage = content.slice(0, 100);
+            } else if (Array.isArray(content)) {
+              for (const block of content) {
+                if (
+                  typeof block === "object" &&
+                  block &&
+                  (block as Record<string, unknown>).type === "text"
+                ) {
+                  firstUserMessage = String((block as Record<string, unknown>).text || "").slice(
+                    0,
+                    100,
+                  );
+                  break;
+                }
+              }
+            }
+            break; // Found first user message
+          }
+        } catch {
+          // Skip malformed lines
+        }
+      }
+      rl.close();
+      fileStream.destroy();
+    } catch {
+      // Ignore read errors
+    }
+
+    discovered.push({
+      sessionId,
+      sessionFile: filePath,
+      mtime: stats.mtimeMs,
+      firstUserMessage,
+    });
+  }
+
+  // Sort by mtime descending (most recent first)
+  discovered.sort((a, b) => b.mtime - a.mtime);
+
+  return discovered;
+}
+
 export async function loadSessionCostSummary(params: {
   sessionId?: string;
   sessionEntry?: SessionEntry;
   sessionFile?: string;
   config?: OpenClawConfig;
+  startMs?: number;
+  endMs?: number;
 }): Promise<SessionCostSummary | null> {
   const sessionFile =
     params.sessionFile ??
@@ -271,24 +442,289 @@ export async function loadSessionCostSummary(params: {
 
   const totals = emptyTotals();
   let lastActivity: number | undefined;
+  const activityDatesSet = new Set<string>();
+  const dailyMap = new Map<string, { tokens: number; cost: number }>();
 
   await scanUsageFile({
     filePath: sessionFile,
     config: params.config,
     onEntry: (entry) => {
-      applyUsageTotals(totals, entry.usage);
-      applyCostTotal(totals, entry.costTotal);
       const ts = entry.timestamp?.getTime();
+
+      // Filter by date range if specified
+      if (params.startMs !== undefined && ts !== undefined && ts < params.startMs) {
+        return;
+      }
+      if (params.endMs !== undefined && ts !== undefined && ts > params.endMs) {
+        return;
+      }
+
+      applyUsageTotals(totals, entry.usage);
+      applyCostBreakdown(totals, entry.costBreakdown);
       if (ts && (!lastActivity || ts > lastActivity)) {
         lastActivity = ts;
       }
+      // Track activity dates and per-day breakdown
+      if (entry.timestamp) {
+        const dayKey = formatDayKey(entry.timestamp);
+        activityDatesSet.add(dayKey);
+
+        // Compute tokens and cost for this entry
+        const entryTokens =
+          (entry.usage?.input ?? 0) +
+          (entry.usage?.output ?? 0) +
+          (entry.usage?.cacheRead ?? 0) +
+          (entry.usage?.cacheWrite ?? 0);
+        const entryCost =
+          (entry.costBreakdown?.input ?? 0) +
+          (entry.costBreakdown?.output ?? 0) +
+          (entry.costBreakdown?.cacheRead ?? 0) +
+          (entry.costBreakdown?.cacheWrite ?? 0);
+
+        const existing = dailyMap.get(dayKey) ?? { tokens: 0, cost: 0 };
+        dailyMap.set(dayKey, {
+          tokens: existing.tokens + entryTokens,
+          cost: existing.cost + entryCost,
+        });
+      }
     },
   });
+
+  // Convert daily map to sorted array
+  const dailyBreakdown: SessionDailyUsage[] = Array.from(dailyMap.entries())
+    .map(([date, data]) => ({ date, tokens: data.tokens, cost: data.cost }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   return {
     sessionId: params.sessionId,
     sessionFile,
     lastActivity,
+    activityDates: Array.from(activityDatesSet).sort(),
+    dailyBreakdown,
     ...totals,
   };
+}
+
+export type SessionUsageTimePoint = {
+  timestamp: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  cost: number;
+  cumulativeTokens: number;
+  cumulativeCost: number;
+};
+
+export type SessionUsageTimeSeries = {
+  sessionId?: string;
+  points: SessionUsageTimePoint[];
+};
+
+export async function loadSessionUsageTimeSeries(params: {
+  sessionId?: string;
+  sessionEntry?: SessionEntry;
+  sessionFile?: string;
+  config?: OpenClawConfig;
+  maxPoints?: number;
+}): Promise<SessionUsageTimeSeries | null> {
+  const sessionFile =
+    params.sessionFile ??
+    (params.sessionId ? resolveSessionFilePath(params.sessionId, params.sessionEntry) : undefined);
+  if (!sessionFile || !fs.existsSync(sessionFile)) {
+    return null;
+  }
+
+  const points: SessionUsageTimePoint[] = [];
+  let cumulativeTokens = 0;
+  let cumulativeCost = 0;
+
+  await scanUsageFile({
+    filePath: sessionFile,
+    config: params.config,
+    onEntry: (entry) => {
+      const ts = entry.timestamp?.getTime();
+      if (!ts) {
+        return;
+      }
+
+      const input = entry.usage.input ?? 0;
+      const output = entry.usage.output ?? 0;
+      const cacheRead = entry.usage.cacheRead ?? 0;
+      const cacheWrite = entry.usage.cacheWrite ?? 0;
+      const totalTokens = entry.usage.total ?? input + output + cacheRead + cacheWrite;
+      const cost = entry.costTotal ?? 0;
+
+      cumulativeTokens += totalTokens;
+      cumulativeCost += cost;
+
+      points.push({
+        timestamp: ts,
+        input,
+        output,
+        cacheRead,
+        cacheWrite,
+        totalTokens,
+        cost,
+        cumulativeTokens,
+        cumulativeCost,
+      });
+    },
+  });
+
+  // Sort by timestamp
+  points.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Optionally downsample if too many points
+  const maxPoints = params.maxPoints ?? 100;
+  if (points.length > maxPoints) {
+    const step = Math.ceil(points.length / maxPoints);
+    const downsampled: SessionUsageTimePoint[] = [];
+    for (let i = 0; i < points.length; i += step) {
+      downsampled.push(points[i]);
+    }
+    // Always include the last point
+    if (downsampled[downsampled.length - 1] !== points[points.length - 1]) {
+      downsampled.push(points[points.length - 1]);
+    }
+    return { sessionId: params.sessionId, points: downsampled };
+  }
+
+  return { sessionId: params.sessionId, points };
+}
+
+export type SessionLogEntry = {
+  timestamp: number;
+  role: "user" | "assistant";
+  content: string;
+  tokens?: number;
+  cost?: number;
+};
+
+export async function loadSessionLogs(params: {
+  sessionId?: string;
+  sessionEntry?: SessionEntry;
+  sessionFile?: string;
+  config?: OpenClawConfig;
+  limit?: number;
+}): Promise<SessionLogEntry[] | null> {
+  const sessionFile =
+    params.sessionFile ??
+    (params.sessionId ? resolveSessionFilePath(params.sessionId, params.sessionEntry) : undefined);
+  if (!sessionFile || !fs.existsSync(sessionFile)) {
+    return null;
+  }
+
+  const logs: SessionLogEntry[] = [];
+  const limit = params.limit ?? 50;
+
+  const fileStream = fs.createReadStream(sessionFile, { encoding: "utf-8" });
+  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+  for await (const line of rl) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      const message = parsed.message as Record<string, unknown> | undefined;
+      if (!message) {
+        continue;
+      }
+
+      const role = message.role as string | undefined;
+      if (role !== "user" && role !== "assistant") {
+        continue;
+      }
+
+      // Extract content
+      let content = "";
+      const rawContent = message.content;
+      if (typeof rawContent === "string") {
+        content = rawContent;
+      } else if (Array.isArray(rawContent)) {
+        // Handle content blocks (text, tool_use, etc.)
+        content = rawContent
+          .map((block: unknown) => {
+            if (typeof block === "string") {
+              return block;
+            }
+            const b = block as Record<string, unknown>;
+            if (b.type === "text" && typeof b.text === "string") {
+              return b.text;
+            }
+            if (b.type === "tool_use") {
+              return `[Tool: ${b.name}]`;
+            }
+            if (b.type === "tool_result") {
+              return `[Tool Result]`;
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join("\n");
+      }
+
+      if (!content) {
+        continue;
+      }
+
+      // Truncate very long content
+      const maxLen = 2000;
+      if (content.length > maxLen) {
+        content = content.slice(0, maxLen) + "…";
+      }
+
+      // Get timestamp
+      let timestamp = 0;
+      if (typeof parsed.timestamp === "string") {
+        timestamp = new Date(parsed.timestamp).getTime();
+      } else if (typeof message.timestamp === "number") {
+        timestamp = message.timestamp;
+      }
+
+      // Get usage for assistant messages
+      let tokens: number | undefined;
+      let cost: number | undefined;
+      if (role === "assistant") {
+        const usage = normalizeUsage(message.usage as Record<string, unknown> | undefined);
+        if (usage) {
+          tokens =
+            usage.total ??
+            (usage.input ?? 0) +
+              (usage.output ?? 0) +
+              (usage.cacheRead ?? 0) +
+              (usage.cacheWrite ?? 0);
+          const costConfig = resolveModelCostConfig({
+            provider: message.provider as string | undefined,
+            model: message.model as string | undefined,
+            config: params.config,
+          });
+          cost = estimateUsageCost({ usage, cost: costConfig });
+        }
+      }
+
+      logs.push({
+        timestamp,
+        role: role as "user" | "assistant",
+        content,
+        tokens,
+        cost,
+      });
+    } catch {
+      // Ignore malformed lines
+    }
+  }
+
+  // Sort by timestamp and limit
+  logs.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Return most recent logs
+  if (logs.length > limit) {
+    return logs.slice(-limit);
+  }
+
+  return logs;
 }

@@ -302,20 +302,18 @@ export type ConfigSchemaResponse = {
 };
 
 export type PresenceEntry = {
-  deviceFamily?: string | null;
-  host?: string | null;
   instanceId?: string | null;
+  host?: string | null;
   ip?: string | null;
-  lastInputSeconds?: number | null;
-  mode?: string | null;
-  modelIdentifier?: string | null;
+  version?: string | null;
   platform?: string | null;
+  deviceFamily?: string | null;
+  modelIdentifier?: string | null;
+  mode?: string | null;
+  lastInputSeconds?: number | null;
   reason?: string | null;
-  roles?: Array<string | null> | null;
-  scopes?: Array<string | null> | null;
   text?: string | null;
   ts?: number | null;
-  version?: string | null;
 };
 
 export type GatewaySessionsDefaults = {
@@ -424,6 +422,92 @@ export type SessionsPatchResult = {
   };
 };
 
+export type SessionsUsageEntry = {
+  key: string;
+  label?: string;
+  sessionId?: string;
+  updatedAt?: number;
+  usage: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    totalTokens: number;
+    totalCost: number;
+    inputCost?: number;
+    outputCost?: number;
+    cacheReadCost?: number;
+    cacheWriteCost?: number;
+    missingCostEntries: number;
+    lastActivity?: number;
+    activityDates?: string[]; // YYYY-MM-DD dates when session had activity
+  } | null;
+  contextWeight?: {
+    systemPrompt: { chars: number; projectContextChars: number; nonProjectContextChars: number };
+    skills: { promptChars: number; entries: Array<{ name: string; blockChars: number }> };
+    tools: {
+      listChars: number;
+      schemaChars: number;
+      entries: Array<{ name: string; summaryChars: number; schemaChars: number }>;
+    };
+    injectedWorkspaceFiles: Array<{
+      name: string;
+      path: string;
+      rawChars: number;
+      injectedChars: number;
+      truncated: boolean;
+    }>;
+  } | null;
+};
+
+export type SessionsUsageTotals = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  totalCost: number;
+  inputCost: number;
+  outputCost: number;
+  cacheReadCost: number;
+  cacheWriteCost: number;
+  missingCostEntries: number;
+};
+
+export type SessionsUsageResult = {
+  updatedAt: number;
+  startDate: string;
+  endDate: string;
+  sessions: SessionsUsageEntry[];
+  totals: SessionsUsageTotals;
+};
+
+export type CostUsageDailyEntry = SessionsUsageTotals & { date: string };
+
+export type CostUsageSummary = {
+  updatedAt: number;
+  days: number;
+  daily: CostUsageDailyEntry[];
+  totals: SessionsUsageTotals;
+};
+
+export type SessionUsageTimePoint = {
+  timestamp: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  totalTokens: number;
+  cost: number;
+  cumulativeTokens: number;
+  cumulativeCost: number;
+};
+
+export type SessionUsageTimeSeries = {
+  sessionId?: string;
+  points: SessionUsageTimePoint[];
+};
+
 export type CronSchedule =
   | { kind: "at"; atMs: number }
   | { kind: "every"; everyMs: number; anchorMs?: number }
@@ -515,7 +599,6 @@ export type SkillStatusEntry = {
   name: string;
   description: string;
   source: string;
-  bundled?: boolean;
   filePath: string;
   baseDir: string;
   skillKey: string;

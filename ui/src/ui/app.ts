@@ -1,14 +1,14 @@
 import { LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import type { EventLogEntry } from "./app-events.ts";
-import type { AppViewState } from "./app-view-state.ts";
-import type { DevicePairingList } from "./controllers/devices.ts";
-import type { ExecApprovalRequest } from "./controllers/exec-approval.ts";
-import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals.ts";
-import type { SkillMessage } from "./controllers/skills.ts";
-import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
-import type { Tab } from "./navigation.ts";
-import type { ResolvedTheme, ThemeMode } from "./theme.ts";
+import type { EventLogEntry } from "./app-events";
+import type { AppViewState } from "./app-view-state";
+import type { DevicePairingList } from "./controllers/devices";
+import type { ExecApprovalRequest } from "./controllers/exec-approval";
+import type { ExecApprovalsFile, ExecApprovalsSnapshot } from "./controllers/exec-approvals";
+import type { SkillMessage } from "./controllers/skills";
+import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway";
+import type { Tab } from "./navigation";
+import type { ResolvedTheme, ThemeMode } from "./theme";
 import type {
   AgentsListResult,
   AgentsFilesListResult,
@@ -27,8 +27,8 @@ import type {
   SkillStatusReport,
   StatusSummary,
   NostrProfile,
-} from "./types.ts";
-import type { NostrProfileFormState } from "./views/channels.nostr-profile-form.ts";
+} from "./types";
+import type { NostrProfileFormState } from "./views/channels.nostr-profile-form";
 import {
   handleChannelConfigReload as handleChannelConfigReloadInternal,
   handleChannelConfigSave as handleChannelConfigSaveInternal,
@@ -41,28 +41,28 @@ import {
   handleWhatsAppLogout as handleWhatsAppLogoutInternal,
   handleWhatsAppStart as handleWhatsAppStartInternal,
   handleWhatsAppWait as handleWhatsAppWaitInternal,
-} from "./app-channels.ts";
+} from "./app-channels";
 import {
   handleAbortChat as handleAbortChatInternal,
   handleSendChat as handleSendChatInternal,
   removeQueuedMessage as removeQueuedMessageInternal,
-} from "./app-chat.ts";
-import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults.ts";
-import { connectGateway as connectGatewayInternal } from "./app-gateway.ts";
+} from "./app-chat";
+import { DEFAULT_CRON_FORM, DEFAULT_LOG_LEVEL_FILTERS } from "./app-defaults";
+import { connectGateway as connectGatewayInternal } from "./app-gateway";
 import {
   handleConnected,
   handleDisconnected,
   handleFirstUpdated,
   handleUpdated,
-} from "./app-lifecycle.ts";
-import { renderApp } from "./app-render.ts";
+} from "./app-lifecycle";
+import { renderApp } from "./app-render";
 import {
   exportLogs as exportLogsInternal,
   handleChatScroll as handleChatScrollInternal,
   handleLogsScroll as handleLogsScrollInternal,
   resetChatScroll as resetChatScrollInternal,
   scheduleChatScroll as scheduleChatScrollInternal,
-} from "./app-scroll.ts";
+} from "./app-scroll";
 import {
   applySettings as applySettingsInternal,
   loadCron as loadCronInternal,
@@ -70,15 +70,15 @@ import {
   setTab as setTabInternal,
   setTheme as setThemeInternal,
   onPopState as onPopStateInternal,
-} from "./app-settings.ts";
+} from "./app-settings";
 import {
   resetToolStream as resetToolStreamInternal,
   type ToolStreamEntry,
-} from "./app-tool-stream.ts";
-import { resolveInjectedAssistantIdentity } from "./assistant-identity.ts";
-import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity.ts";
-import { loadSettings, type UiSettings } from "./storage.ts";
-import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types.ts";
+} from "./app-tool-stream";
+import { resolveInjectedAssistantIdentity } from "./assistant-identity";
+import { loadAssistantIdentity as loadAssistantIdentityInternal } from "./controllers/assistant-identity";
+import { loadSettings, type UiSettings } from "./storage";
+import { type ChatAttachment, type ChatQueueItem, type CronFormState } from "./ui-types";
 
 declare global {
   interface Window {
@@ -130,7 +130,7 @@ export class OpenClawApp extends LitElement {
   @state() chatStream: string | null = null;
   @state() chatStreamStartedAt: number | null = null;
   @state() chatRunId: string | null = null;
-  @state() compactionStatus: import("./app-tool-stream.ts").CompactionStatus | null = null;
+  @state() compactionStatus: import("./app-tool-stream").CompactionStatus | null = null;
   @state() chatAvatarUrl: string | null = null;
   @state() chatThinkingLevel: string | null = null;
   @state() chatQueue: ChatQueueItem[] = [];
@@ -225,6 +225,25 @@ export class OpenClawApp extends LitElement {
   @state() sessionsFilterLimit = "120";
   @state() sessionsIncludeGlobal = true;
   @state() sessionsIncludeUnknown = false;
+
+  @state() usageLoading = false;
+  @state() usageResult: import("./types.js").SessionsUsageResult | null = null;
+  @state() usageCostSummary: import("./types.js").CostUsageSummary | null = null;
+  @state() usageError: string | null = null;
+  @state() usageStartDate = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 20); // 21 days default
+    return d.toISOString().slice(0, 10);
+  })();
+  @state() usageEndDate = new Date().toISOString().slice(0, 10);
+  @state() usageSelectedSessions: string[] = [];
+  @state() usageSelectedDays: string[] = [];
+  @state() usageChartMode: "tokens" | "cost" = "cost";
+  @state() usageTimeSeriesMode: "cumulative" | "per-turn" = "per-turn";
+  @state() usageTimeSeries: import("./types.js").SessionUsageTimeSeries | null = null;
+  @state() usageTimeSeriesLoading = false;
+  @state() usageSessionLogs: import("./views/usage.js").SessionLogEntry[] | null = null;
+  @state() usageSessionLogsLoading = false;
 
   @state() cronLoading = false;
   @state() cronJobs: CronJob[] = [];
